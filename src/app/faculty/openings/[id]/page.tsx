@@ -4,6 +4,9 @@ import { requireRole } from "@/lib/session";
 import { query } from "@/lib/db";
 import { DashboardShell, Card, Stat, StatusBadge, PageTitle } from "@/components/DashboardShell";
 import { ActionButton } from "@/components/ActionButton";
+import { ScoreBreakdown, scoreParts } from "@/components/ScoreBreakdown";
+import { bestEvidence } from "@/lib/vectors";
+import { fromPgVector } from "@/lib/embed";
 
 export const metadata = { title: "Opening" };
 
@@ -21,10 +24,13 @@ export default async function FacultyOpeningPage({ params }: { params: Promise<{
     seats_total: number; seats_filled: number; min_cgpa: string; duration_weeks: number;
     stipend: number; deadline: Date; total_applications: string; applied: string;
     shortlisted: string; offered: string; accepted: string; rejected: string;
+    embedding: string | null; has_success_profile: boolean;
   }>(
     `SELECT o.opening_id, o.title, o.description, o.domain, o.status, o.seats_total, o.seats_filled,
             o.min_cgpa, o.duration_weeks, o.stipend, o.deadline,
-            p.total_applications, p.applied, p.shortlisted, p.offered, p.accepted, p.rejected
+            p.total_applications, p.applied, p.shortlisted, p.offered, p.accepted, p.rejected,
+            o.embedding::text AS embedding,
+            EXISTS (SELECT 1 FROM center_success_profiles c WHERE c.center_id = o.center_id) AS has_success_profile
      FROM openings o
      JOIN v_opening_pipeline p ON p.opening_id = o.opening_id
      WHERE o.opening_id = $1 AND o.faculty_id = $2`,
@@ -56,6 +62,14 @@ export default async function FacultyOpeningPage({ params }: { params: Promise<{
                 a.match_score DESC NULLS LAST, a.applied_at`,
       [id]),
   ]);
+
+  // Ranked suggestions from fn_rank_candidates (hybrid score computed in PostgreSQL)
+  const candidates = await query<{
+    student_id: string; full_name: string; srn: string; branch: string; semester: number; cgpa: string;
+    sem_score: string; success_score: string; skill_score: string; proof_part: string;
+    total_score: string; matched_skills: string[]; application_status: string | null;
+  }>("SELECT * FROM fn_rank_candidates($1, 15)", [id]);
+  const evidence = await bestEvidence(candidates.rows.map((c) => Number(c.student_id)), fromPgVector(op.embedding));
 
   return (
     <DashboardShell name={session.name} role="faculty">
@@ -89,10 +103,56 @@ export default async function FacultyOpeningPage({ params }: { params: Promise<{
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="space-y-4 lg:col-span-2">
+          <Card
+            title="Suggested candidates"
+            note={op.has_success_profile ? "Includes similarity to your lab's top past interns" : "Ranked by proven fit"}
+          >
+            {!op.embedding && (
+              <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-warn-soft px-3 py-2 text-xs">
+                <span>This opening has no vector yet, so ranking uses skills and proof-of-work only.</span>
+                <ActionButton url={`/api/openings/${id}/embed`} label="Compute now" busyLabel="Computing…" variant="ghost" />
+              </div>
+            )}
+            {candidates.rows.length === 0 ? (
+              <p className="text-muted">No eligible students yet.</p>
+            ) : (
+              <ol className="divide-y divide-line">
+                {candidates.rows.map((c, i) => {
+                  const ev = evidence.get(Number(c.student_id));
+                  return (
+                    <li key={c.student_id} className="flex flex-wrap items-start justify-between gap-4 py-3">
+                      <div className="flex gap-3">
+                        <span className="mt-0.5 w-5 text-right font-serif text-lg text-muted">{i + 1}</span>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{c.full_name}</span>
+                            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
+                              {Math.round(Number(c.total_score) * 100)}% match
+                            </span>
+                            {c.application_status ? <StatusBadge status={c.application_status} /> : (
+                              <span className="text-xs text-muted">hasn&apos;t applied</span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 text-xs text-muted">{c.srn} · {c.branch} · Sem {c.semester} · CGPA {Number(c.cgpa).toFixed(2)}</div>
+                          {ev && ev.similarity > 0.3 && (
+                            <div className="mt-1 text-xs">Best evidence: repo <strong>{ev.repo}</strong> ({Math.round(ev.similarity * 100)}% similar to this opening)</div>
+                          )}
+                          {c.matched_skills.length > 0 && (
+                            <div className="mt-1 text-xs">Has: {c.matched_skills.join(", ")}</div>
+                          )}
+                        </div>
+                      </div>
+                      <ScoreBreakdown parts={scoreParts(c, op.has_success_profile)} />
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </Card>
           <Card title={`Applicants (${op.total_applications})`}>
             {applicants.rows.length === 0 ? (
-              <p className="text-muted">No applications yet. Ranked candidate suggestions arrive in Phase 3.</p>
+              <p className="text-muted">No applications yet.</p>
             ) : (
               <ul className="divide-y divide-line">
                 {applicants.rows.map((a) => (

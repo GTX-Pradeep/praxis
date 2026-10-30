@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/session";
 import { query } from "@/lib/db";
 import { DashboardShell, Card, Stat } from "@/components/DashboardShell";
 import { VerifyButton } from "./VerifyButton";
+import { ActionButton } from "@/components/ActionButton";
 
 export const metadata = { title: "Admin dashboard" };
 
@@ -39,6 +40,14 @@ export default async function AdminDashboard() {
      GROUP BY rc.center_id, rc.name
      ORDER BY faculty DESC, rc.name`
   );
+
+  // How much of the data has vectors for semantic matching
+  const vec = (await query<{ openings: string; openings_vec: string; students: string; students_vec: string }>(
+    `SELECT (SELECT COUNT(*) FROM openings)                                AS openings,
+            (SELECT COUNT(*) FROM openings WHERE embedding IS NOT NULL)    AS openings_vec,
+            (SELECT COUNT(*) FROM students)                                AS students,
+            (SELECT COUNT(DISTINCT student_id) FROM student_embeddings)    AS students_vec`
+  )).rows[0];
 
   return (
     <DashboardShell name={session.name || "Administrator"} role="admin">
@@ -88,6 +97,19 @@ export default async function AdminDashboard() {
               ))}
             </tbody>
           </table>
+        </Card>
+      </div>
+      <div className="mt-4">
+        <Card title="Matching vectors" note="all-MiniLM-L6-v2 · 384 dimensions · pgvector">
+          <p>
+            Openings with a vector: <strong>{vec.openings_vec}/{vec.openings}</strong> · Students with a vector:{" "}
+            <strong>{vec.students_vec}/{vec.students}</strong>
+          </p>
+          <p className="mt-1 text-xs text-muted">Students get a vector after uploading a resume or syncing GitHub.</p>
+          <div className="mt-3">
+            <ActionButton url="/api/admin/embeddings" label="Rebuild all vectors" busyLabel="Rebuilding… (can take a minute)"
+                          variant="ghost" confirm="Recompute every opening and student vector?" />
+          </div>
         </Card>
       </div>
     </DashboardShell>

@@ -2,6 +2,7 @@ import { withTransaction } from "@/lib/db";
 import { apiSession } from "@/lib/session";
 import { skillsSchema, firstError } from "@/lib/validation";
 import { fail, failFromError, readJson } from "@/lib/api";
+import { checkAlerts } from "@/lib/vectors";
 
 // PUT /api/student/skills — replace the student's whole skill list in one transaction
 export async function PUT(request: Request) {
@@ -24,6 +25,7 @@ export async function PUT(request: Request) {
         );
       }
     });
+    await checkAlerts(session.userId); // skills are part of the match score
     return Response.json({ ok: true, count: skills.length });
   } catch (err) {
     return failFromError(err);

@@ -3,6 +3,7 @@ import { apiSession } from "@/lib/session";
 import { openingSchema, firstError } from "@/lib/validation";
 import { fail, failFromError, readJson } from "@/lib/api";
 import { logActivity } from "@/lib/activity";
+import { refreshOpeningEmbedding } from "@/lib/vectors";
 
 // POST /api/openings — a verified faculty member posts a new opening
 export async function POST(request: Request) {
@@ -51,8 +52,11 @@ export async function POST(request: Request) {
       return id;
     });
 
+    // Vector for semantic matching (stored in openings.embedding via pgvector)
+    const embedded = await refreshOpeningEmbedding(openingId);
+
     logActivity({ actorId: session.userId, role: "faculty", action: "create_opening", entity: "openings", entityId: openingId });
-    return Response.json({ openingId }, { status: 201 });
+    return Response.json({ openingId, embedded }, { status: 201 });
   } catch (err) {
     return failFromError(err);
   }

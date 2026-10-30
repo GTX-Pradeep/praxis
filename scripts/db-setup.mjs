@@ -21,10 +21,27 @@ const need = (k) => {
   return process.env[k];
 };
 
+// Right after `docker compose up`, PostgreSQL may still be starting.
+// Keep trying for up to ~60 seconds before giving up.
+async function connectWithRetry(makeClient, label) {
+  for (let attempt = 1; attempt <= 30; attempt++) {
+    const client = makeClient();
+    try {
+      await client.connect();
+      return client;
+    } catch (e) {
+      await client.end?.().catch?.(() => {});
+      if (attempt === 30) throw e;
+      if (attempt === 1) process.stdout.write(`Waiting for ${label} to start`);
+      process.stdout.write(".");
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+}
+
 async function setupPostgres() {
-  const admin = new pg.Client({ connectionString: need("DATABASE_ADMIN_URL") });
-  await admin.connect();
-  console.log("PostgreSQL: running schema files");
+  const admin = await connectWithRetry(() => new pg.Client({ connectionString: need("DATABASE_ADMIN_URL") }), "PostgreSQL");
+  console.log("\nPostgreSQL: running schema files");
 
   const dir = join(root, "db", "sql");
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
@@ -61,8 +78,8 @@ async function setupPostgres() {
 }
 
 async function setupMongo() {
-  const client = new MongoClient(need("MONGODB_URI"));
-  await client.connect();
+  const client = await connectWithRetry(
+    () => new MongoClient(need("MONGODB_URI"), { serverSelectionTimeoutMS: 2000 }), "MongoDB");
   const db = client.db(process.env.MONGODB_DB || "praxis");
   console.log("MongoDB: creating collections");
 

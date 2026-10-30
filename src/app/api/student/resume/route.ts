@@ -6,6 +6,7 @@ import { fail, failFromError } from "@/lib/api";
 import { MAX_RESUME_BYTES, looksLikePdf, pdfToText, splitSections } from "@/lib/resume";
 import { detectSkills } from "@/lib/skills-detect";
 import { logActivity } from "@/lib/activity";
+import { checkAlerts, refreshResumeEmbedding } from "@/lib/vectors";
 
 // POST /api/student/resume — multipart form with a "file" field (PDF, max 5 MB).
 // The extracted text is stored in MongoDB (resumes collection); the PDF itself is not kept.
@@ -49,6 +50,10 @@ export async function POST(request: Request) {
     );
     await query("UPDATE students SET profile_updated_at = now() WHERE student_id = $1", [session.userId]);
 
+    // Resume vector for semantic matching, then look for newly matching openings
+    const embedded = await refreshResumeEmbedding(session.userId, text);
+    if (embedded) await checkAlerts(session.userId);
+
     // Suggest catalogue skills mentioned in the resume that aren't on the profile yet
     const mine = (await query<{ skill_id: string }>(
       "SELECT skill_id FROM student_skills WHERE student_id = $1", [session.userId]
@@ -60,6 +65,7 @@ export async function POST(request: Request) {
       characters: text.length,
       sections: Object.keys(sections),
       suggestedSkills: suggested,
+      embedded,
     });
   } catch (err) {
     return failFromError(err);

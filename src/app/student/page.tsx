@@ -9,7 +9,7 @@ export const metadata = { title: "Student dashboard" };
 export default async function StudentDashboard() {
   const session = await requireRole("student");
 
-  const [profile, recent, fresh, docs] = await Promise.all([
+  const [profile, recent, fresh, docs, recommended] = await Promise.all([
     query<{
       full_name: string; srn: string; branch: string; semester: number; cgpa: string;
       github_username: string | null; proof_score: string; skill_count: string;
@@ -36,6 +36,22 @@ export default async function StudentDashboard() {
        ORDER BY o.created_at DESC LIMIT 5`,
       [session.userId]),
     getStudentDocs(session.userId),
+    // Best matches by hybrid score, with the most important skill I'm missing (skill-gap hint)
+    query<{ opening_id: string; title: string; center_name: string; total_score: string; missing_skill: string | null }>(
+      `SELECT o.opening_id, o.title, rc.name AS center_name, m.total_score,
+              (SELECT s.name FROM opening_skills os JOIN skills s ON s.skill_id = os.skill_id
+               WHERE os.opening_id = o.opening_id
+                 AND NOT EXISTS (SELECT 1 FROM student_skills ss WHERE ss.student_id = $1 AND ss.skill_id = os.skill_id)
+               ORDER BY os.weight DESC LIMIT 1) AS missing_skill
+       FROM openings o
+       JOIN research_centers rc ON rc.center_id = o.center_id
+       CROSS JOIN LATERAL fn_match_score($1, o.opening_id) m
+       WHERE o.status = 'open' AND o.deadline > now()
+         AND fn_is_eligible($1, o.opening_id)
+         AND NOT EXISTS (SELECT 1 FROM applications a WHERE a.student_id = $1 AND a.opening_id = o.opening_id)
+       ORDER BY m.total_score DESC
+       LIMIT 3`,
+      [session.userId]),
   ]);
   const s = profile.rows[0];
 
@@ -113,8 +129,25 @@ export default async function StudentDashboard() {
           <Link href="/student/openings" className="mt-2 inline-block text-sm text-accent">Browse all →</Link>
         </Card>
 
-        <Card title="Recommended for you" note="Phase 4">
-          <p className="text-muted">Openings ranked by how well your proven work matches them.</p>
+        <Card title="Recommended for you" note="Ranked by your proven fit">
+          {recommended.rows.length === 0 ? (
+            <p className="text-muted">No open openings you&apos;re eligible for yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {recommended.rows.map((r) => (
+                <li key={r.opening_id}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <Link href={`/student/openings/${r.opening_id}`} className="font-medium hover:text-accent">{r.title}</Link>
+                    <span className="shrink-0 text-xs font-semibold text-accent">{Math.round(Number(r.total_score) * 100)}%</span>
+                  </div>
+                  <span className="block text-xs text-muted">
+                    {r.center_name}
+                    {r.missing_skill && <> · adding <strong>{r.missing_skill}</strong> would raise your match</>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
     </DashboardShell>

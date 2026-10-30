@@ -7,6 +7,7 @@ import { fetchGithubProfile, GithubError } from "@/lib/github";
 import { proofPipeline, proofSummary, type ProofResult } from "@/lib/proof";
 import { detectSkills } from "@/lib/skills-detect";
 import { logActivity } from "@/lib/activity";
+import { checkAlerts, embedRepos, refreshGithubEmbedding } from "@/lib/vectors";
 
 const COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -37,10 +38,11 @@ export async function POST() {
     }
 
     const gh = await fetchGithubProfile(username);
+    const repos = await embedRepos(gh.repos); // each original repo gets its own vector
 
     await profiles.replaceOne(
       { student_id: sid },
-      { student_id: sid, username: gh.username, repos: gh.repos, language_totals: gh.language_totals, fetched_at: new Date() },
+      { student_id: sid, username: gh.username, repos, language_totals: gh.language_totals, fetched_at: new Date() },
       { upsert: true }
     );
 
@@ -71,6 +73,9 @@ export async function POST() {
       { upsert: true }
     );
 
+    const embedded = await refreshGithubEmbedding(session.userId, repos);
+    const newAlerts = embedded ? await checkAlerts(session.userId) : 0;
+
     // Skills visible in the repos (languages + topics) that the student hasn't listed yet
     const evidence = [
       ...Object.keys(gh.language_totals),
@@ -79,7 +84,7 @@ export async function POST() {
     const suggested = (await detectSkills(evidence)).filter((s) => !skillNames.includes(s.name));
 
     logActivity({ actorId: session.userId, role: "student", action: "github_sync", entity: "github_profiles", details: { score: proof.score } });
-    return Response.json({ proof, summary: proofSummary(proof), suggestedSkills: suggested });
+    return Response.json({ proof, summary: proofSummary(proof), suggestedSkills: suggested, embedded, newAlerts });
   } catch (err) {
     if (err instanceof GithubError) return fail(err.status, err.message);
     return failFromError(err);
