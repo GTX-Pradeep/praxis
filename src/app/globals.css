@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f7f5f0;
+  --card: #ffffff;
+  --ink: #1c1d1f;
+  --muted: #5f6368;
+  --line: #e3dfd6;
+  --accent: #1f5f4a;
+  --accent-soft: #e4efe9;
+  --danger: #b3261e;
+  --danger-soft: #fbe9e7;
+  --warn-soft: #fdf3dc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #141517;
+    --card: #1c1d20;
+    --ink: #ececea;
+    --muted: #a3a6ab;
+    --line: #2e3034;
+    --accent: #6fc3a2;
+    --accent-soft: #1d3029;
+    --danger: #f2b8b5;
+    --danger-soft: #3a1f1d;
+    --warn-soft: #3a3120;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: var(--accent);
+  color: var(--paper);
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+.btn-ghost:hover { border-color: var(--accent); }

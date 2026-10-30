@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: praxis-postgres
+    environment:
+      POSTGRES_USER: praxis_owner
+      POSTGRES_PASSWORD: change_me_owner
+      POSTGRES_DB: praxis
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U praxis_owner -d praxis"]
+      interval: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: praxis-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: praxis
+      MONGO_INITDB_ROOT_PASSWORD: change_me_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+
+volumes:
+  pgdata:
+  mongodata:
