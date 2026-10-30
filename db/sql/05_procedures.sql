@@ -85,7 +85,9 @@ BEGIN
 
     SELECT
         COALESCE(
-            SUM(os.weight * LEAST(1, COALESCE(ss.proficiency, 0) / 5.0
+            -- an endorsed skill counts even if the student never listed it (as level 3),
+            -- and endorsement doubles its credit
+            SUM(os.weight * LEAST(1, COALESCE(ss.proficiency, CASE WHEN en.skill_id IS NOT NULL THEN 3 ELSE 0 END) / 5.0
                                     * CASE WHEN en.skill_id IS NOT NULL THEN 2 ELSE 1 END))
             / NULLIF(SUM(os.weight), 0), 0),
         COALESCE(array_agg(sk.name ORDER BY os.weight DESC)

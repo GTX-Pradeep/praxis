@@ -41,6 +41,22 @@ export default async function FacultyDashboard() {
     [session.userId]
   );
 
+  // Lab success profile + intern counts
+  const lab = (await query<{ intern_count: number | null; updated_at: Date | null; ongoing: string; completed: string; avg_rating: string | null }>(
+    `SELECT csp.intern_count, csp.updated_at,
+            COUNT(*) FILTER (WHERE i.internship_id IS NOT NULL AND i.end_date IS NULL)     AS ongoing,
+            COUNT(*) FILTER (WHERE i.end_date IS NOT NULL)                                AS completed,
+            ROUND(AVG(i.final_rating), 1)                                                 AS avg_rating
+     FROM faculty f
+     LEFT JOIN center_success_profiles csp ON csp.center_id = f.center_id
+     LEFT JOIN openings o     ON o.faculty_id = f.faculty_id
+     LEFT JOIN applications a ON a.opening_id = o.opening_id
+     LEFT JOIN internships i  ON i.application_id = a.application_id
+     WHERE f.faculty_id = $1
+     GROUP BY csp.intern_count, csp.updated_at`,
+    [session.userId]
+  )).rows[0];
+
   return (
     <DashboardShell name={f.full_name} role="faculty">
       <h1 className="font-serif text-3xl font-semibold">{f.full_name}</h1>
@@ -99,11 +115,17 @@ export default async function FacultyDashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <Card title="Ranked candidates" note="Phase 3">
-          <p className="text-muted">Eligible students ranked by proven fit, with the reasons behind each score.</p>
+        <Card title="Interns">
+          <p><strong>{lab.ongoing}</strong> ongoing · <strong>{lab.completed}</strong> completed
+            {lab.avg_rating && <> · average rating <strong>{lab.avg_rating}</strong></>}</p>
+          <Link href="/faculty/interns" className="mt-2 inline-block text-sm text-accent">Rate and endorse →</Link>
         </Card>
-        <Card title="Find more like my best intern" note="Phase 4">
-          <p className="text-muted">Ranking against your lab&apos;s success profile from past top-rated interns.</p>
+        <Card title="Lab success profile">
+          {lab.intern_count ? (
+            <p>Built from <strong>{lab.intern_count}</strong> intern{lab.intern_count > 1 ? "s" : ""} rated 4 or 5. Candidate rankings now include how similar students are to them.</p>
+          ) : (
+            <p className="text-muted">Rate a completed intern 4 or 5 to create it. It powers &ldquo;Like my best interns&rdquo; ranking.</p>
+          )}
         </Card>
         <Card title="Match alerts" note="Phase 5">
           <p className="text-muted">Students who just grew into a match for one of your open requirements.</p>

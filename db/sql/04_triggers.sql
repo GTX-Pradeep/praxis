@@ -156,3 +156,36 @@ $$;
 CREATE TRIGGER trg_touch_student_profile
     AFTER INSERT OR UPDATE OR DELETE ON student_skills
     FOR EACH ROW EXECUTE FUNCTION fn_touch_student_profile();
+
+-- ---------------------------------------------------------------------
+-- 6. Skill endorsements are only valid when
+--    * the internship has been completed (has an end date), and
+--    * the endorser is the faculty member who owns that opening
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_validate_endorsement()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    v_end      DATE;
+    v_faculty  BIGINT;
+BEGIN
+    SELECT i.end_date, o.faculty_id INTO v_end, v_faculty
+    FROM internships i
+    JOIN applications a ON a.application_id = i.application_id
+    JOIN openings o     ON o.opening_id     = a.opening_id
+    WHERE i.internship_id = NEW.internship_id;
+
+    IF v_end IS NULL THEN
+        RAISE EXCEPTION 'Skills can only be endorsed after the internship is completed'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.endorsed_by <> v_faculty THEN
+        RAISE EXCEPTION 'Only the supervising faculty member can endorse skills for this internship'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validate_endorsement
+    BEFORE INSERT OR UPDATE ON skill_endorsements
+    FOR EACH ROW EXECUTE FUNCTION fn_validate_endorsement();

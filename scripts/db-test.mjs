@@ -176,8 +176,17 @@ const intern = await one(`SELECT internship_id FROM internships WHERE applicatio
 await expectError("cannot rate an internship before it ends",
   () => q(`UPDATE internships SET final_rating = 5 WHERE internship_id = $1`, [intern.internship_id]),
   /chk_rating_after_end/);
+await expectError("cannot endorse skills before the internship ends",
+  () => q(`INSERT INTO skill_endorsements (internship_id, skill_id, endorsed_by) VALUES ($1, $2, $3)`, [intern.internship_id, pt.skill_id, fUser.user_id]),
+  /only be endorsed after/);
 await q(`UPDATE internships SET end_date = start_date + 70, final_rating = 5 WHERE internship_id = $1`, [intern.internship_id]);
-await q(`INSERT INTO skill_endorsements (internship_id, skill_id, endorsed_by) VALUES ($1, $2, $3)`, [intern.internship_id, pt.skill_id, fUser.user_id]);
+const otherProf = await one(`INSERT INTO users (email, password_hash, role) VALUES ('prof.other@pes.edu', $1, 'faculty') RETURNING user_id`, [hash]);
+await q(`INSERT INTO faculty (faculty_id, center_id, full_name, is_verified) VALUES ($1, $2, 'Dr. Other', true)`, [otherProf.user_id, center.center_id]);
+await expectError("only the supervising faculty can endorse",
+  () => q(`INSERT INTO skill_endorsements (internship_id, skill_id, endorsed_by) VALUES ($1, $2, $3)`, [intern.internship_id, pt.skill_id, otherProf.user_id]),
+  /Only the supervising faculty/);
+await expectOk("supervisor endorses a skill after completion",
+  () => q(`INSERT INTO skill_endorsements (internship_id, skill_id, endorsed_by) VALUES ($1, $2, $3)`, [intern.internship_id, pt.skill_id, fUser.user_id]));
 const prof = await one(`SELECT intern_count FROM center_success_profiles WHERE center_id = $1`, [center.center_id]);
 prof?.intern_count === 1 ? ok("rating 5 created the lab's success profile (trigger → procedure)") : bad("success profile", JSON.stringify(prof));
 

@@ -99,3 +99,10 @@ export const githubUsernameSchema = z.object({
     .trim()
     .regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/, "Not a valid GitHub username"),
 });
+
+export const completeInternshipSchema = z.object({
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose an end date"),
+  rating: z.coerce.number().int().min(1, "Choose a rating").max(5),
+  remarks: z.string().trim().max(1000).optional(),
+  skillIds: z.array(z.coerce.number().int().positive()).max(10).default([]),
+});

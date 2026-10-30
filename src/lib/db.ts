@@ -73,11 +73,25 @@ export function dbErrorMessage(err: unknown): { status: number; message: string 
     }
     case "23503":
       return { status: 400, message: "A referenced record does not exist." };
-    case "23514": // check_violation, including messages raised by our triggers
+    case "23514": { // check_violation, including messages raised by our triggers
+      const friendly: Record<string, string> = {
+        chk_internship_dates: "The end date can't be before the start date.",
+        chk_internship_rating: "Ratings must be between 1 and 5.",
+        chk_rating_after_end: "Set an end date before rating the internship.",
+        chk_students_cgpa: "CGPA must be between 0 and 10.",
+        chk_students_semester: "Semester must be between 1 and 8.",
+        chk_students_github: "That is not a valid GitHub username.",
+        chk_users_email_format: "Enter a valid email address.",
+        chk_openings_deadline: "The deadline must be in the future.",
+        chk_openings_filled: "All seats for this opening are already filled.",
+        chk_openings_seats: "Seats must be between 1 and 50.",
+        chk_application_sop: "The statement of purpose is too long.",
+      };
       return {
         status: 400,
-        message: e.constraint ? `Invalid value (${e.constraint}).` : e.message ?? "Invalid value.",
+        message: e.constraint ? friendly[e.constraint] ?? `Invalid value (${e.constraint}).` : e.message ?? "Invalid value.",
       };
+    }
     case "22P02":
       return { status: 400, message: "Invalid input format." };
     case "P0002": // no_data_found raised by a procedure

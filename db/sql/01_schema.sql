@@ -184,7 +184,7 @@ CREATE TABLE internships (
     end_date        DATE,
     final_rating    SMALLINT,
     remarks         TEXT,
-    CONSTRAINT chk_internship_dates  CHECK (end_date IS NULL OR end_date > start_date),
+    CONSTRAINT chk_internship_dates  CHECK (end_date IS NULL OR end_date >= start_date),
     CONSTRAINT chk_internship_rating CHECK (final_rating IS NULL OR final_rating BETWEEN 1 AND 5),
     CONSTRAINT chk_rating_after_end  CHECK (final_rating IS NULL OR end_date IS NOT NULL)
 );

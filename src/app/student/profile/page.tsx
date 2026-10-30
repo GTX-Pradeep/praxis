@@ -22,6 +22,22 @@ export default async function ProfilePage() {
     getStudentDocs(session.userId),
   ]);
   const s = student.rows[0];
+
+  // Faculty-verified skills (view) and completed/ongoing internships
+  const [verified, internships] = await Promise.all([
+    query<{ skill_name: string; endorsed_by: string; endorsement_count: string }>(
+      "SELECT skill_name, endorsed_by, endorsement_count FROM v_student_verified_skills WHERE student_id = $1 ORDER BY skill_name",
+      [session.userId]),
+    query<{ title: string; center_name: string; start_date: string; end_date: string | null; final_rating: number | null; remarks: string | null }>(
+      `SELECT o.title, rc.name AS center_name, to_char(i.start_date, 'DD Mon YYYY') AS start_date,
+              to_char(i.end_date, 'DD Mon YYYY') AS end_date, i.final_rating, i.remarks
+       FROM internships i
+       JOIN applications a      ON a.application_id = i.application_id
+       JOIN openings o          ON o.opening_id     = a.opening_id
+       JOIN research_centers rc ON rc.center_id     = o.center_id
+       WHERE a.student_id = $1 ORDER BY i.start_date DESC`,
+      [session.userId]),
+  ]);
   const current: Record<number, number> = Object.fromEntries(mine.rows.map((r) => [Number(r.skill_id), r.proficiency]));
   const cat = catalogue.rows.map((r) => ({ id: Number(r.skill_id), name: r.name, category: r.category }));
 
@@ -93,6 +109,37 @@ export default async function ProfilePage() {
                 ))}
               </tbody>
             </table>
+          </Card>
+        </div>
+      )}
+
+      {(verified.rows.length > 0 || internships.rows.length > 0) && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <Card title="Verified skills" note="Endorsed by supervising faculty">
+            {verified.rows.length === 0 ? <p className="text-muted">None yet. Skills are verified when a supervisor endorses them after an internship.</p> : (
+              <ul className="flex flex-wrap gap-2">
+                {verified.rows.map((v) => (
+                  <li key={v.skill_name} className="rounded-full bg-accent-soft px-3 py-1 text-sm" title={`Endorsed by ${v.endorsed_by}`}>
+                    ✓ {v.skill_name} <span className="text-xs text-muted">· {v.endorsed_by}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card title="Internships">
+            <ul className="divide-y divide-line">
+              {internships.rows.map((i) => (
+                <li key={i.title + i.start_date} className="py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">{i.title}</span>
+                    {i.final_rating ? <span className="text-sm">{"★".repeat(i.final_rating)}<span className="text-muted">{"★".repeat(5 - i.final_rating)}</span></span>
+                      : <span className="text-xs text-accent">Ongoing</span>}
+                  </div>
+                  <div className="text-xs text-muted">{i.center_name} · {i.start_date}{i.end_date ? ` to ${i.end_date}` : ""}</div>
+                  {i.remarks && <p className="mt-1 text-sm text-muted">&ldquo;{i.remarks}&rdquo;</p>}
+                </li>
+              ))}
+            </ul>
           </Card>
         </div>
       )}

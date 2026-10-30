@@ -13,10 +13,16 @@ export const metadata = { title: "Opening" };
 const fmtDate = (d: Date) =>
   new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(d);
 
-export default async function FacultyOpeningPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function FacultyOpeningPage({
+  params, searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ rank?: string }>;
+}) {
   const session = await requireRole("faculty");
   const id = Number((await params).id);
   if (!Number.isInteger(id)) notFound();
+  const rankBySuccess = (await searchParams).rank === "success";
 
   // Opening + pipeline counts (view), only if this faculty owns it
   const op = (await query<{
@@ -68,7 +74,19 @@ export default async function FacultyOpeningPage({ params }: { params: Promise<{
     student_id: string; full_name: string; srn: string; branch: string; semester: number; cgpa: string;
     sem_score: string; success_score: string; skill_score: string; proof_part: string;
     total_score: string; matched_skills: string[]; application_status: string | null;
-  }>("SELECT * FROM fn_rank_candidates($1, 15)", [id]);
+  }>(
+    rankBySuccess && op.has_success_profile
+      // "Find more like my best intern": order by similarity to the lab's success profile
+      ? "SELECT * FROM fn_rank_candidates($1, 500) ORDER BY success_score DESC, total_score DESC LIMIT 15"
+      : "SELECT * FROM fn_rank_candidates($1, 15)",
+    [id]
+  );
+  const verified = await query<{ student_id: string; skills: string[] }>(
+    `SELECT student_id, array_agg(skill_name ORDER BY skill_name) AS skills
+     FROM v_student_verified_skills WHERE student_id = ANY($1::bigint[]) GROUP BY student_id`,
+    [candidates.rows.map((c) => Number(c.student_id))]
+  );
+  const verifiedBy = new Map(verified.rows.map((v) => [Number(v.student_id), v.skills]));
   const evidence = await bestEvidence(candidates.rows.map((c) => Number(c.student_id)), fromPgVector(op.embedding));
 
   return (
@@ -106,7 +124,14 @@ export default async function FacultyOpeningPage({ params }: { params: Promise<{
         <div className="space-y-4 lg:col-span-2">
           <Card
             title="Suggested candidates"
-            note={op.has_success_profile ? "Includes similarity to your lab's top past interns" : "Ranked by proven fit"}
+            action={op.has_success_profile ? (
+              <div className="flex rounded-lg border border-line p-0.5 text-xs">
+                <Link href={`/faculty/openings/${id}`} className={`rounded-md px-2.5 py-1 ${!rankBySuccess ? "bg-accent text-paper" : "text-muted"}`}>Overall fit</Link>
+                <Link href={`/faculty/openings/${id}?rank=success`} className={`rounded-md px-2.5 py-1 ${rankBySuccess ? "bg-accent text-paper" : "text-muted"}`}>Like my best interns</Link>
+              </div>
+            ) : (
+              <span className="text-xs text-muted">Rate interns 4–5 to unlock &ldquo;Like my best interns&rdquo;</span>
+            )}
           >
             {!op.embedding && (
               <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-warn-soft px-3 py-2 text-xs">
@@ -140,6 +165,9 @@ export default async function FacultyOpeningPage({ params }: { params: Promise<{
                           )}
                           {c.matched_skills.length > 0 && (
                             <div className="mt-1 text-xs">Has: {c.matched_skills.join(", ")}</div>
+                          )}
+                          {verifiedBy.get(Number(c.student_id)) && (
+                            <div className="mt-1 text-xs text-accent">✓ Verified by faculty: {verifiedBy.get(Number(c.student_id))!.join(", ")}</div>
                           )}
                         </div>
                       </div>
