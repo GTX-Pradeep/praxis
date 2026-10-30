@@ -16,8 +16,12 @@ const NAV: Record<Role, { href: string; label: string }[]> = {
     { href: "/faculty", label: "Dashboard" },
     { href: "/faculty/openings/new", label: "Post opening" },
     { href: "/faculty/interns", label: "Interns" },
+    { href: "/faculty/alerts", label: "Alerts" },
   ],
-  admin: [{ href: "/admin", label: "Overview" }],
+  admin: [
+    { href: "/admin", label: "Overview" },
+    { href: "/admin/analytics", label: "Analytics" },
+  ],
 };
 
 export function DashboardShell({

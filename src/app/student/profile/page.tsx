@@ -14,8 +14,8 @@ export default async function ProfilePage() {
   const session = await requireRole("student");
 
   const [student, catalogue, mine, docs] = await Promise.all([
-    query<{ full_name: string; srn: string; branch: string; semester: number; cgpa: string; github_username: string | null; proof_score: string }>(
-      "SELECT full_name, srn, branch, semester, cgpa, github_username, proof_score FROM students WHERE student_id = $1",
+    query<{ full_name: string; srn: string; branch: string; semester: number; cgpa: string; github_username: string | null; proof_score: string; momentum_score: string }>(
+      "SELECT full_name, srn, branch, semester, cgpa, github_username, proof_score, momentum_score FROM students WHERE student_id = $1",
       [session.userId]),
     query<{ skill_id: string; name: string; category: string }>("SELECT skill_id, name, category FROM skills ORDER BY category, name"),
     query<{ skill_id: string; proficiency: number }>("SELECT skill_id, proficiency FROM student_skills WHERE student_id = $1", [session.userId]),
@@ -93,7 +93,7 @@ export default async function ProfilePage() {
 
       {docs.snapshots.length > 0 && (
         <div className="mt-4">
-          <Card title="Growth timeline" note="One snapshot per month">
+          <Card title="Growth timeline" note={`Momentum ${Number(s.momentum_score) >= 0 ? "+" : ""}${Number(s.momentum_score).toFixed(1)} proof points/month`}>
             <table className="w-full text-left">
               <thead className="text-xs uppercase tracking-wide text-muted">
                 <tr><th className="py-2">Month</th><th className="py-2 text-right">Original repos</th><th className="py-2 text-right">Own commits</th><th className="py-2 text-right">Proof score</th></tr>

@@ -87,6 +87,13 @@ export default async function FacultyOpeningPage({
     [candidates.rows.map((c) => Number(c.student_id))]
   );
   const verifiedBy = new Map(verified.rows.map((v) => [Number(v.student_id), v.skills]));
+  const extras = await query<{ student_id: string; momentum_score: string; new_alert: boolean }>(
+    `SELECT s.student_id, s.momentum_score,
+            EXISTS (SELECT 1 FROM match_alerts ma WHERE ma.student_id = s.student_id AND ma.opening_id = $2 AND NOT ma.is_seen) AS new_alert
+     FROM students s WHERE s.student_id = ANY($1::bigint[])`,
+    [candidates.rows.map((c) => Number(c.student_id)), id]
+  );
+  const extraBy = new Map(extras.rows.map((e) => [Number(e.student_id), e]));
   const evidence = await bestEvidence(candidates.rows.map((c) => Number(c.student_id)), fromPgVector(op.embedding));
 
   return (
@@ -157,6 +164,12 @@ export default async function FacultyOpeningPage({
                             </span>
                             {c.application_status ? <StatusBadge status={c.application_status} /> : (
                               <span className="text-xs text-muted">hasn&apos;t applied</span>
+                            )}
+                            {extraBy.get(Number(c.student_id))?.new_alert && (
+                              <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold">New match</span>
+                            )}
+                            {Number(extraBy.get(Number(c.student_id))?.momentum_score ?? 0) > 0 && (
+                              <span className="text-xs text-accent">↑ +{Number(extraBy.get(Number(c.student_id))!.momentum_score).toFixed(1)}/month</span>
                             )}
                           </div>
                           <div className="mt-0.5 text-xs text-muted">{c.srn} · {c.branch} · Sem {c.semester} · CGPA {Number(c.cgpa).toFixed(2)}</div>

@@ -57,6 +57,16 @@ export default async function FacultyDashboard() {
     [session.userId]
   )).rows[0];
 
+  const latestAlerts = await query<{ alert_id: string; full_name: string; title: string; opening_id: string; score: string }>(
+    `SELECT ma.alert_id, s.full_name, o.title, o.opening_id, ma.score
+     FROM match_alerts ma
+     JOIN openings o ON o.opening_id = ma.opening_id
+     JOIN students s ON s.student_id = ma.student_id
+     WHERE o.faculty_id = $1 AND NOT ma.is_seen
+     ORDER BY ma.created_at DESC LIMIT 4`,
+    [session.userId]
+  );
+
   return (
     <DashboardShell name={f.full_name} role="faculty">
       <h1 className="font-serif text-3xl font-semibold">{f.full_name}</h1>
@@ -127,8 +137,20 @@ export default async function FacultyDashboard() {
             <p className="text-muted">Rate a completed intern 4 or 5 to create it. It powers &ldquo;Like my best interns&rdquo; ranking.</p>
           )}
         </Card>
-        <Card title="Match alerts" note="Phase 5">
-          <p className="text-muted">Students who just grew into a match for one of your open requirements.</p>
+        <Card title="Match alerts">
+          {latestAlerts.rows.length === 0 ? (
+            <p className="text-muted">No new alerts. You&apos;ll see students here when they grow into a strong match.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {latestAlerts.rows.map((a) => (
+                <li key={a.alert_id} className="text-sm">
+                  <strong>{a.full_name}</strong> · {Math.round(Number(a.score) * 100)}% for{" "}
+                  <Link href={`/faculty/openings/${a.opening_id}`} className="text-accent">{a.title}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/faculty/alerts" className="mt-2 inline-block text-sm text-accent">All alerts →</Link>
         </Card>
       </div>
     </DashboardShell>

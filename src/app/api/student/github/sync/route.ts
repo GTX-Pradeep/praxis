@@ -8,6 +8,7 @@ import { proofPipeline, proofSummary, type ProofResult } from "@/lib/proof";
 import { detectSkills } from "@/lib/skills-detect";
 import { logActivity } from "@/lib/activity";
 import { checkAlerts, embedRepos, refreshGithubEmbedding } from "@/lib/vectors";
+import { momentumPipeline, monthsAgo } from "@/lib/momentum";
 
 const COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -16,7 +17,7 @@ const COOLDOWN_MS = 5 * 60 * 1000;
 //  2. store the snapshot in MongoDB (github_profiles)
 //  3. compute the proof-of-work score with a MongoDB aggregation pipeline
 //  4. save the score in PostgreSQL (students.proof_score)
-//  5. record this month's growth snapshot (profile_snapshots)
+//  5. record this month's growth snapshot (profile_snapshots) and recompute momentum
 export async function POST() {
   const session = await apiSession("student");
   if (!session) return fail(403, "Only students can sync GitHub");
@@ -73,6 +74,11 @@ export async function POST() {
       { upsert: true }
     );
 
+    // Momentum: points of proof-of-work gained per month over the last 6 months
+    const [mom] = await mongo.collection("profile_snapshots").aggregate(momentumPipeline(sid, monthsAgo(5))).toArray();
+    const momentum = Number(mom?.momentum ?? 0);
+    await query("UPDATE students SET momentum_score = $1 WHERE student_id = $2", [momentum, session.userId]);
+
     const embedded = await refreshGithubEmbedding(session.userId, repos);
     const newAlerts = embedded ? await checkAlerts(session.userId) : 0;
 
@@ -84,7 +90,7 @@ export async function POST() {
     const suggested = (await detectSkills(evidence)).filter((s) => !skillNames.includes(s.name));
 
     logActivity({ actorId: session.userId, role: "student", action: "github_sync", entity: "github_profiles", details: { score: proof.score } });
-    return Response.json({ proof, summary: proofSummary(proof), suggestedSkills: suggested, embedded, newAlerts });
+    return Response.json({ proof, summary: proofSummary(proof), suggestedSkills: suggested, embedded, newAlerts, momentum });
   } catch (err) {
     if (err instanceof GithubError) return fail(err.status, err.message);
     return failFromError(err);
