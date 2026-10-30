@@ -124,9 +124,3 @@ src/
 - The app connects as a restricted PostgreSQL role with no DDL rights; the audit table is trigger-only
 - Secrets live in `.env.local`, which git ignores
 
-## Team
-
-| Member | Responsibilities |
-|---|---|
-| _Name 1_ | |
-| _Name 2_ | |
