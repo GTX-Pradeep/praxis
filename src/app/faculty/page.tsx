@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { query } from "@/lib/db";
-import { DashboardShell, Card, Stat } from "@/components/DashboardShell";
+import { DashboardShell, Card, Stat, StatusBadge } from "@/components/DashboardShell";
 
 export const metadata = { title: "Faculty dashboard" };
 
@@ -26,6 +27,20 @@ export default async function FacultyDashboard() {
   );
   const f = rows[0];
 
+  // My openings with per-stage counts from the v_opening_pipeline view
+  const openings = await query<{
+    opening_id: string; title: string; status: string; deadline: Date; seats_total: number;
+    seats_filled: number; total_applications: string; shortlisted: string; offered: string;
+  }>(
+    `SELECT p.opening_id, p.title, p.status, p.deadline, p.seats_total, p.seats_filled,
+            p.total_applications, p.shortlisted, p.offered
+     FROM v_opening_pipeline p
+     JOIN openings o ON o.opening_id = p.opening_id
+     WHERE o.faculty_id = $1
+     ORDER BY (p.status = 'open') DESC, p.deadline`,
+    [session.userId]
+  );
+
   return (
     <DashboardShell name={f.full_name} role="faculty">
       <h1 className="font-serif text-3xl font-semibold">{f.full_name}</h1>
@@ -45,17 +60,52 @@ export default async function FacultyDashboard() {
         <Stat label="New match alerts" value={f.unseen_alerts} />
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card title="Post an opening" note="Day 2">
-          <p className="text-muted">Describe the work, weight the skills you need, set seats and a deadline.</p>
+      <div className="mt-6">
+        <Card
+          title="My openings"
+          action={f.is_verified ? <Link href="/faculty/openings/new" className="btn px-3 py-1.5 text-sm">Post opening</Link> : undefined}
+        >
+          {openings.rows.length === 0 ? (
+            <p className="text-muted">You haven&apos;t posted any openings yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left">
+                <thead className="text-xs uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="py-2">Opening</th><th className="py-2">Status</th>
+                    <th className="py-2 text-right">Applied</th><th className="py-2 text-right">Shortlisted</th>
+                    <th className="py-2 text-right">Offered</th><th className="py-2 text-right">Seats</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {openings.rows.map((o) => (
+                    <tr key={o.opening_id}>
+                      <td className="py-2.5">
+                        <Link href={`/faculty/openings/${o.opening_id}`} className="font-medium hover:text-accent">{o.title}</Link>
+                        <div className="text-xs text-muted">Deadline {o.deadline.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}</div>
+                      </td>
+                      <td className="py-2.5"><StatusBadge status={o.status} /></td>
+                      <td className="py-2.5 text-right">{o.total_applications}</td>
+                      <td className="py-2.5 text-right">{o.shortlisted}</td>
+                      <td className="py-2.5 text-right">{o.offered}</td>
+                      <td className="py-2.5 text-right">{o.seats_filled}/{o.seats_total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
-        <Card title="Ranked candidates" note="Day 3">
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <Card title="Ranked candidates" note="Phase 3">
           <p className="text-muted">Eligible students ranked by proven fit, with the reasons behind each score.</p>
         </Card>
-        <Card title="Find more like my best intern" note="Day 4">
+        <Card title="Find more like my best intern" note="Phase 4">
           <p className="text-muted">Ranking against your lab&apos;s success profile from past top-rated interns.</p>
         </Card>
-        <Card title="Match alerts" note="Day 5">
+        <Card title="Match alerts" note="Phase 5">
           <p className="text-muted">Students who just grew into a match for one of your open requirements.</p>
         </Card>
       </div>

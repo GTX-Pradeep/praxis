@@ -52,7 +52,14 @@ export async function withTransaction<T>(
 
 /** Turn a PostgreSQL error into a message that is safe to show users. */
 export function dbErrorMessage(err: unknown): { status: number; message: string } {
-  const e = err as { code?: string; constraint?: string; message?: string };
+  const e = err as { code?: string; constraint?: string; message?: string; name?: string };
+  if (e.name?.startsWith("Mongo")) {
+    console.error(err);
+    return { status: 503, message: "The document database is unavailable. Is MongoDB running?" };
+  }
+  if ((e as { code?: unknown }).code === "ECONNREFUSED") {
+    return { status: 503, message: "The database is unavailable. Is Docker running?" };
+  }
   switch (e.code) {
     case "23505": {
       const map: Record<string, string> = {
@@ -73,6 +80,8 @@ export function dbErrorMessage(err: unknown): { status: number; message: string 
       };
     case "22P02":
       return { status: 400, message: "Invalid input format." };
+    case "P0002": // no_data_found raised by a procedure
+      return { status: 404, message: e.message ?? "Not found." };
     default:
       console.error(err);
       return { status: 500, message: "Something went wrong. Please try again." };

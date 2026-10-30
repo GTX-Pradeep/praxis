@@ -8,6 +8,26 @@ DBMS Level 3 project — Next.js, PostgreSQL + pgvector, MongoDB.
 
 ---
 
+## Features so far
+
+**Students**
+- Register with SRN, branch, semester and CGPA; edit skills with proficiency levels
+- Link GitHub and sync it: public repos, languages and commit authorship are read into MongoDB, and a **proof-of-work score** (0–100) is computed with a MongoDB aggregation pipeline
+- Upload a resume PDF: text is extracted, split into sections and stored in MongoDB
+- Skills detected in the resume or repos can be added in one click
+- Monthly growth snapshots of repos, commits and score
+- Browse openings with **full-text search**, see eligibility reasons, apply with a statement of purpose
+- Track every application through a status timeline; accept an offer (transaction) or withdraw
+
+**Faculty**
+- Register into an existing research center or create a new lab (becomes its head)
+- After admin verification: post openings with weighted skills, seats, minimum CGPA, eligible semesters and a deadline
+- See each opening's pipeline and applicants (with proof-of-work and match score); shortlist, offer or reject
+- Close, re-open or (if nobody applied) delete an opening
+
+**Admin**
+- Verify faculty accounts and new labs; see users per role and openings per center
+
 ## Tech stack
 
 | Layer | Choice |
@@ -104,3 +124,9 @@ src/
 - The app connects as a restricted PostgreSQL role with no DDL rights; the audit table is trigger-only
 - Secrets live in `.env.local`, which git ignores
 
+## Team
+
+| Member | Responsibilities |
+|---|---|
+| _Name 1_ | |
+| _Name 2_ | |

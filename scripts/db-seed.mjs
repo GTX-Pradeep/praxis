@@ -1,5 +1,5 @@
 // Starter data: the admin account, research centers and the skill catalogue.
-// (The full demo dataset with students and past internships comes on Day 6.)
+// (The full demo dataset with students and past internships comes in a later phase.)
 // Usage:  npm run db:seed      (reads .env.local; safe to run more than once)
 
 import { config } from "dotenv";
