@@ -105,10 +105,13 @@ export default async function AdminDashboard() {
             Openings with a vector: <strong>{vec.openings_vec}/{vec.openings}</strong> · Students with a vector:{" "}
             <strong>{vec.students_vec}/{vec.students}</strong>
           </p>
-          <p className="mt-1 text-xs text-muted">Students get a vector after uploading a resume or syncing GitHub.</p>
+          <p className="mt-1 text-xs text-muted">
+            Students get a vector after uploading a resume or syncing GitHub. Rebuild recomputes every vector, proof-of-work
+            and momentum score, lab success profile, match alert and statistic from the stored data, e.g. after loading demo data.
+          </p>
           <div className="mt-3">
-            <ActionButton url="/api/admin/embeddings" label="Rebuild all vectors" busyLabel="Rebuilding… (can take a minute)"
-                          variant="ghost" confirm="Recompute every opening and student vector?" />
+            <ActionButton url="/api/admin/embeddings" label="Rebuild matching data" busyLabel="Rebuilding… (can take a minute)"
+                          variant="ghost" confirm="Recompute all vectors, scores, success profiles and alerts?" />
           </div>
         </Card>
       </div>

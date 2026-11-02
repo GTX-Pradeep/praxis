@@ -90,33 +90,6 @@ export async function checkAlerts(studentId: number): Promise<number> {
   }
 }
 
-/** Admin tool: rebuild every vector from the stored source data */
-export async function rebuildAllEmbeddings() {
-  const result = { openings: 0, resumes: 0, github: 0, failed: 0, mongoError: null as string | null };
-
-  const openings = await query<{ opening_id: string }>("SELECT opening_id FROM openings");
-  for (const o of openings.rows) {
-    if (await refreshOpeningEmbedding(Number(o.opening_id))) result.openings++; else result.failed++;
-  }
-
-  try {
-    const mongo = await getMongo();
-    for await (const doc of mongo.collection("resumes").find({}, { projection: { student_id: 1, raw_text: 1 } })) {
-      if (await refreshResumeEmbedding(Number(doc.student_id), doc.raw_text)) result.resumes++; else result.failed++;
-    }
-    const profiles = mongo.collection("github_profiles");
-    for await (const doc of profiles.find({}, { projection: { student_id: 1, repos: 1 } })) {
-      const repos = await embedRepos(doc.repos as RepoSnapshot[]);
-      await profiles.updateOne({ _id: doc._id }, { $set: { repos } });
-      if (await refreshGithubEmbedding(Number(doc.student_id), repos)) result.github++; else result.failed++;
-    }
-  } catch (err) {
-    // Student vectors come from MongoDB documents; opening vectors are still rebuilt
-    result.mongoError = (err as Error).message;
-  }
-  return result;
-}
-
 /** Best-matching repo per student for an opening vector (explains a ranking) */
 export async function bestEvidence(studentIds: number[], openingVec: number[] | null) {
   const out = new Map<number, { repo: string; similarity: number }>();

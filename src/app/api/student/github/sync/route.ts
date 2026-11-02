@@ -4,20 +4,20 @@ import { getMongo } from "@/lib/mongo";
 import { apiSession } from "@/lib/session";
 import { fail, failFromError } from "@/lib/api";
 import { fetchGithubProfile, GithubError } from "@/lib/github";
-import { proofPipeline, proofSummary, type ProofResult } from "@/lib/proof";
+import { proofSummary } from "@/lib/proof";
 import { detectSkills } from "@/lib/skills-detect";
 import { logActivity } from "@/lib/activity";
 import { checkAlerts, embedRepos, refreshGithubEmbedding } from "@/lib/vectors";
-import { momentumPipeline, monthsAgo } from "@/lib/momentum";
+import { recomputeStudentScores } from "@/lib/scores";
 
 const COOLDOWN_MS = 5 * 60 * 1000;
 
 // POST /api/student/github/sync
 //  1. fetch public repos + commit authorship from GitHub
-//  2. store the snapshot in MongoDB (github_profiles)
-//  3. compute the proof-of-work score with a MongoDB aggregation pipeline
-//  4. save the score in PostgreSQL (students.proof_score)
-//  5. record this month's growth snapshot (profile_snapshots) and recompute momentum
+//  2. embed each original repo and store the snapshot in MongoDB (github_profiles)
+//  3. recompute proof-of-work (MongoDB aggregation), this month's growth snapshot
+//     and momentum, and save the scores in PostgreSQL
+//  4. update the student's GitHub vector and look for new match alerts
 export async function POST() {
   const session = await apiSession("student");
   if (!session) return fail(403, "Only students can sync GitHub");
@@ -47,37 +47,8 @@ export async function POST() {
       { upsert: true }
     );
 
-    const [proof] = (await profiles.aggregate(proofPipeline(sid)).toArray()) as unknown as ProofResult[];
-
-    await query(
-      "UPDATE students SET proof_score = $1, profile_updated_at = now() WHERE student_id = $2",
-      [proof.score, session.userId]
-    );
-
-    // Monthly snapshot (one per student per month, upserted) for the growth timeline
-    const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit" })
-      .format(new Date()).slice(0, 7);
-    const skillNames = (await query<{ name: string }>(
-      `SELECT s.name FROM student_skills ss JOIN skills s ON s.skill_id = ss.skill_id WHERE ss.student_id = $1`,
-      [session.userId]
-    )).rows.map((r) => r.name);
-    await mongo.collection("profile_snapshots").updateOne(
-      { student_id: sid, month },
-      { $set: {
-          repo_count: proof.total_repos,
-          original_repo_count: proof.original_repos,
-          own_commits: proof.own_commits,
-          skills: skillNames,
-          proof_score: proof.score,
-          taken_at: new Date(),
-      } },
-      { upsert: true }
-    );
-
-    // Momentum: points of proof-of-work gained per month over the last 6 months
-    const [mom] = await mongo.collection("profile_snapshots").aggregate(momentumPipeline(sid, monthsAgo(5))).toArray();
-    const momentum = Number(mom?.momentum ?? 0);
-    await query("UPDATE students SET momentum_score = $1 WHERE student_id = $2", [momentum, session.userId]);
+    const scores = await recomputeStudentScores(mongo, session.userId);
+    if (!scores) return fail(500, "Could not compute the proof-of-work score");
 
     const embedded = await refreshGithubEmbedding(session.userId, repos);
     const newAlerts = embedded ? await checkAlerts(session.userId) : 0;
@@ -87,10 +58,17 @@ export async function POST() {
       ...Object.keys(gh.language_totals),
       ...gh.repos.filter((r) => !r.is_fork).flatMap((r) => [...r.topics, r.description ?? ""]),
     ].join(" ");
-    const suggested = (await detectSkills(evidence)).filter((s) => !skillNames.includes(s.name));
+    const suggested = (await detectSkills(evidence)).filter((s) => !scores.skills.includes(s.name));
 
-    logActivity({ actorId: session.userId, role: "student", action: "github_sync", entity: "github_profiles", details: { score: proof.score } });
-    return Response.json({ proof, summary: proofSummary(proof), suggestedSkills: suggested, embedded, newAlerts, momentum });
+    logActivity({ actorId: session.userId, role: "student", action: "github_sync", entity: "github_profiles", details: { score: scores.proof.score } });
+    return Response.json({
+      proof: scores.proof,
+      summary: proofSummary(scores.proof),
+      suggestedSkills: suggested,
+      embedded,
+      newAlerts,
+      momentum: scores.momentum,
+    });
   } catch (err) {
     if (err instanceof GithubError) return fail(err.status, err.message);
     return failFromError(err);

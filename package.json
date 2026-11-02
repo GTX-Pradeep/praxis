@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:setup": "node scripts/db-setup.mjs",
     "db:seed": "node scripts/db-seed.mjs",
-    "db:test": "node scripts/db-test.mjs"
+    "db:test": "node scripts/db-test.mjs",
+    "db:demo": "node scripts/db-demo.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.2",

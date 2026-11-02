@@ -1,7 +1,7 @@
 // Sets up both databases from scratch:
 //   1. Runs db/sql/*.sql in order as the owner user (DROP + CREATE everything)
 //   2. Creates the restricted app user and grants it only what it needs
-//   3. Creates MongoDB collections with validators and indexes
+//   3. Drops and recreates MongoDB collections with validators and indexes
 //
 // Usage:  npm run db:setup      (reads .env.local)
 
@@ -83,13 +83,12 @@ async function setupMongo() {
   const db = client.db(process.env.MONGODB_DB || "praxis");
   console.log("MongoDB: creating collections");
 
+  // PostgreSQL was just recreated with fresh ids, so old documents would point at
+  // the wrong students: drop and recreate every collection too.
   const existing = new Set((await db.listCollections().toArray()).map((c) => c.name));
   for (const [name, def] of Object.entries(collections)) {
-    if (existing.has(name)) {
-      await db.command({ collMod: name, validator: def.validator, validationLevel: "strict" });
-    } else {
-      await db.createCollection(name, { validator: def.validator, validationLevel: "strict" });
-    }
+    if (existing.has(name)) await db.collection(name).drop();
+    await db.createCollection(name, { validator: def.validator, validationLevel: "strict" });
     for (const ix of def.indexes) await db.collection(name).createIndex(ix.key, ix.options);
     console.log(`  ✓ ${name} (${def.indexes.length} index${def.indexes.length > 1 ? "es" : ""})`);
   }

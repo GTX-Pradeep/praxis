@@ -40,7 +40,8 @@ $$;
 --
 --   semantic = cosine similarity of the student's vectors to the opening
 --   success  = cosine similarity to the lab's best past interns
---   skills   = weighted overlap with required skills; endorsed skills count double
+--   skills   = weighted overlap with required skills; endorsed skills count double,
+--              self-reported ones are scaled by proof-of-work (0.5 to 1.0)
 --   proof    = verified GitHub proof-of-work score / 100
 -- ---------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION fn_match_score(p_student_id BIGINT, p_opening_id BIGINT)
@@ -83,12 +84,18 @@ BEGIN
         FROM student_embeddings se WHERE se.student_id = p_student_id;
     END IF;
 
+    SELECT COALESCE(s.proof_score, 0) / 100.0 INTO v_proof
+    FROM students s WHERE s.student_id = p_student_id;
+
     SELECT
         COALESCE(
-            -- an endorsed skill counts even if the student never listed it (as level 3),
-            -- and endorsement doubles its credit
+            -- Proven, not claimed:
+            --   * a faculty-endorsed skill counts double (and counts even if the
+            --     student never listed it, as level 3)
+            --   * a self-reported skill is scaled by the student's proof-of-work:
+            --     half credit with no evidence, full credit with a strong record
             SUM(os.weight * LEAST(1, COALESCE(ss.proficiency, CASE WHEN en.skill_id IS NOT NULL THEN 3 ELSE 0 END) / 5.0
-                                    * CASE WHEN en.skill_id IS NOT NULL THEN 2 ELSE 1 END))
+                                    * CASE WHEN en.skill_id IS NOT NULL THEN 2 ELSE 0.5 + 0.5 * v_proof END))
             / NULLIF(SUM(os.weight), 0), 0),
         COALESCE(array_agg(sk.name ORDER BY os.weight DESC)
                  FILTER (WHERE ss.skill_id IS NOT NULL OR en.skill_id IS NOT NULL), '{}')
@@ -105,9 +112,6 @@ BEGIN
         WHERE a.student_id = p_student_id
     ) en ON en.skill_id = os.skill_id
     WHERE os.opening_id = p_opening_id;
-
-    SELECT s.proof_score / 100.0 INTO v_proof
-    FROM students s WHERE s.student_id = p_student_id;
 
     IF v_center_vec IS NULL THEN
         v_total := 0.6 * v_sem + 0.2 * v_skill + 0.2 * COALESCE(v_proof, 0);
