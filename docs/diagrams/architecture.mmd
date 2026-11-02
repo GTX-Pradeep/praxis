@@ -1,0 +1,42 @@
+flowchart TB
+    subgraph Browser["Browser"]
+        S["Student pages"]
+        F["Faculty pages"]
+        A["Admin pages"]
+    end
+
+    subgraph Next["Next.js 16 app (Node.js)"]
+        P["proxy.ts<br/>role check on every page"]
+        RSC["Server components<br/>read data directly"]
+        API["Route handlers /api/*<br/>zod validation, session + role check"]
+        LIB["lib: db.ts (pool, transactions)<br/>mongo.ts · github.ts · embed.ts · proof.ts · momentum.ts"]
+        EMB["all-MiniLM-L6-v2<br/>local embedding model (384-d)"]
+    end
+
+    subgraph DATA["Data layer"]
+    direction LR
+    subgraph PG["PostgreSQL 16 + pgvector"]
+        T["17 tables · constraints<br/>triggers · procedures · views"]
+        V["vector(384) columns<br/>HNSW cosine indexes"]
+        FTS["tsvector + GIN index"]
+    end
+
+    subgraph MG["MongoDB 7"]
+        R["resumes"]
+        G["github_profiles"]
+        SN["profile_snapshots"]
+        L["activity_logs (TTL)"]
+    end
+    end
+
+    GH["GitHub REST API<br/>(public repos)"]
+
+    S & F & A -->|HTTPS + httpOnly JWT cookie| P
+    P --> RSC
+    S & F & A -->|fetch JSON| API
+    RSC --> LIB
+    API --> LIB
+    LIB -->|"pg, parameterised SQL<br/>as restricted role praxis_app"| PG
+    LIB -->|mongodb driver| MG
+    LIB --> EMB
+    LIB -->|sync| GH

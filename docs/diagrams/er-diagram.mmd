@@ -1,0 +1,161 @@
+erDiagram
+    USERS ||--o| STUDENTS : "is a"
+    USERS ||--o| FACULTY : "is a"
+    RESEARCH_CENTERS |o--o{ FACULTY : "employs"
+    FACULTY |o--o| RESEARCH_CENTERS : "heads"
+    RESEARCH_CENTERS ||--o{ OPENINGS : "offers"
+    FACULTY ||--o{ OPENINGS : "posts"
+    STUDENTS ||--o{ STUDENT_SKILLS : "has"
+    SKILLS ||--o{ STUDENT_SKILLS : "rated in"
+    OPENINGS ||--o{ OPENING_SKILLS : "requires"
+    SKILLS ||--o{ OPENING_SKILLS : "required by"
+    OPENINGS ||--o{ OPENING_ELIGIBLE_SEMESTERS : "allows"
+    STUDENTS ||--o{ APPLICATIONS : "submits"
+    OPENINGS ||--o{ APPLICATIONS : "receives"
+    APPLICATIONS ||--o{ APPLICATION_STATUS_HISTORY : "logged in"
+    USERS |o--o{ APPLICATION_STATUS_HISTORY : "changed by"
+    APPLICATIONS ||--o| INTERNSHIPS : "becomes"
+    INTERNSHIPS ||--o{ SKILL_ENDORSEMENTS : "earns"
+    SKILLS ||--o{ SKILL_ENDORSEMENTS : "endorsed"
+    FACULTY ||--o{ SKILL_ENDORSEMENTS : "gives"
+    STUDENTS ||--o{ STUDENT_EMBEDDINGS : "vectorised as"
+    RESEARCH_CENTERS ||--o| CENTER_SUCCESS_PROFILES : "learns"
+    OPENINGS ||--o{ MATCH_ALERTS : "triggers"
+    STUDENTS ||--o{ MATCH_ALERTS : "matched in"
+    OPENINGS ||--o{ INVITATIONS : "for"
+    STUDENTS ||--o{ INVITATIONS : "receives"
+    FACULTY ||--o{ INVITATIONS : "sends"
+
+    USERS {
+        bigint user_id PK
+        varchar email UK
+        char password_hash "bcrypt"
+        user_role role
+        boolean is_active
+        timestamptz created_at
+    }
+    STUDENTS {
+        bigint student_id PK,FK
+        varchar srn UK
+        varchar full_name
+        varchar branch
+        smallint semester "1-8"
+        numeric cgpa "0-10"
+        varchar github_username UK
+        numeric proof_score "0-100"
+        numeric momentum_score
+        timestamptz profile_updated_at
+    }
+    FACULTY {
+        bigint faculty_id PK,FK
+        bigint center_id FK
+        varchar full_name
+        varchar designation
+        boolean is_verified
+    }
+    RESEARCH_CENTERS {
+        bigint center_id PK
+        varchar name UK
+        text description
+        bigint head_faculty_id FK
+        timestamptz created_at
+    }
+    SKILLS {
+        bigint skill_id PK
+        varchar name UK "case-insensitive"
+        varchar category
+    }
+    STUDENT_SKILLS {
+        bigint student_id PK,FK
+        bigint skill_id PK,FK
+        smallint proficiency "1-5"
+    }
+    OPENINGS {
+        bigint opening_id PK
+        bigint center_id FK
+        bigint faculty_id FK
+        varchar title
+        text description
+        varchar domain
+        smallint seats_total
+        smallint seats_filled
+        numeric min_cgpa
+        smallint duration_weeks
+        integer stipend
+        timestamptz deadline
+        opening_status status
+        numeric alert_threshold
+        vector embedding "384-d"
+        tsvector search_tsv "generated"
+    }
+    OPENING_SKILLS {
+        bigint opening_id PK,FK
+        bigint skill_id PK,FK
+        smallint weight "1-5"
+    }
+    OPENING_ELIGIBLE_SEMESTERS {
+        bigint opening_id PK,FK
+        smallint semester PK
+    }
+    APPLICATIONS {
+        bigint application_id PK
+        bigint student_id FK
+        bigint opening_id FK
+        text sop
+        numeric match_score
+        application_status status
+        timestamptz applied_at
+        timestamptz updated_at
+    }
+    APPLICATION_STATUS_HISTORY {
+        bigint history_id PK
+        bigint application_id FK
+        application_status old_status
+        application_status new_status
+        bigint changed_by FK
+        timestamptz changed_at
+    }
+    INTERNSHIPS {
+        bigint internship_id PK
+        bigint application_id FK,UK
+        date start_date
+        date end_date
+        smallint final_rating "1-5"
+        text remarks
+    }
+    SKILL_ENDORSEMENTS {
+        bigint internship_id PK,FK
+        bigint skill_id PK,FK
+        bigint endorsed_by FK
+        timestamptz endorsed_at
+    }
+    STUDENT_EMBEDDINGS {
+        bigint student_id PK,FK
+        embedding_source source PK "resume|github"
+        vector embedding "384-d"
+        timestamptz updated_at
+    }
+    CENTER_SUCCESS_PROFILES {
+        bigint center_id PK,FK
+        vector embedding "384-d"
+        integer intern_count
+        timestamptz updated_at
+    }
+    MATCH_ALERTS {
+        bigint alert_id PK
+        bigint opening_id FK
+        bigint student_id FK
+        numeric score
+        boolean is_seen
+        timestamptz created_at
+    }
+    INVITATIONS {
+        bigint invitation_id PK
+        bigint opening_id FK
+        bigint student_id FK
+        bigint invited_by FK
+        text message
+        invitation_status status
+        timestamptz created_at
+        timestamptz responded_at
+    }
