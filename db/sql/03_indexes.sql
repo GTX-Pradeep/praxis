@@ -23,6 +23,10 @@ CREATE INDEX idx_applications_student_status ON applications (student_id, status
 -- Partial index: only open openings are browsed by deadline
 CREATE INDEX idx_openings_open_deadline ON openings (deadline) WHERE status = 'open';
 
+-- A student's pending invitations (dashboard)
+CREATE INDEX idx_invitations_student_status ON invitations (student_id, status);
+CREATE INDEX idx_invitations_opening ON invitations (opening_id);
+
 -- Unseen alerts per opening for the faculty bell icon
 CREATE INDEX idx_alerts_unseen ON match_alerts (opening_id) WHERE is_seen = FALSE;
 

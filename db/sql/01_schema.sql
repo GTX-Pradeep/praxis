@@ -11,6 +11,7 @@ DROP MATERIALIZED VIEW IF EXISTS mv_center_stats;
 DROP VIEW IF EXISTS v_opening_pipeline;
 DROP VIEW IF EXISTS v_student_verified_skills;
 
+DROP TABLE IF EXISTS invitations                CASCADE;
 DROP TABLE IF EXISTS match_alerts               CASCADE;
 DROP TABLE IF EXISTS center_success_profiles    CASCADE;
 DROP TABLE IF EXISTS student_embeddings         CASCADE;
@@ -28,6 +29,7 @@ DROP TABLE IF EXISTS faculty                    CASCADE;
 DROP TABLE IF EXISTS research_centers           CASCADE;
 DROP TABLE IF EXISTS users                      CASCADE;
 
+DROP TYPE IF EXISTS invitation_status CASCADE;
 DROP TYPE IF EXISTS application_status CASCADE;
 DROP TYPE IF EXISTS opening_status CASCADE;
 DROP TYPE IF EXISTS embedding_source CASCADE;
@@ -39,6 +41,7 @@ CREATE TYPE opening_status     AS ENUM ('open', 'closed', 'filled');
 CREATE TYPE application_status AS ENUM ('applied', 'shortlisted', 'offered',
                                         'accepted', 'rejected', 'withdrawn');
 CREATE TYPE embedding_source   AS ENUM ('resume', 'github');
+CREATE TYPE invitation_status  AS ENUM ('pending', 'accepted', 'declined');
 
 -- ---------- Users & roles ----------
 CREATE TABLE users (
@@ -223,4 +226,19 @@ CREATE TABLE match_alerts (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_alert_once     UNIQUE (opening_id, student_id),
     CONSTRAINT chk_alert_score   CHECK (score BETWEEN 0 AND 1)
+);
+
+-- Faculty invite a suggested student who hasn't applied yet
+CREATE TABLE invitations (
+    invitation_id  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    opening_id     BIGINT NOT NULL REFERENCES openings(opening_id) ON DELETE CASCADE,
+    student_id     BIGINT NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+    invited_by     BIGINT NOT NULL REFERENCES faculty(faculty_id)  ON DELETE CASCADE,
+    message        TEXT,
+    status         invitation_status NOT NULL DEFAULT 'pending',
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    responded_at   TIMESTAMPTZ,
+    CONSTRAINT uq_invitation_once      UNIQUE (opening_id, student_id),
+    CONSTRAINT chk_invitation_message  CHECK (message IS NULL OR length(message) <= 500),
+    CONSTRAINT chk_invitation_response CHECK ((status = 'pending') = (responded_at IS NULL))
 );

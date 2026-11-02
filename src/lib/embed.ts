@@ -3,7 +3,8 @@ import path from "node:path";
 
 // Text → 384-dimensional vector with all-MiniLM-L6-v2, run locally through
 // Transformers.js (no API key, no paid service). The model (~23 MB) is
-// downloaded from Hugging Face on first use and cached in .cache/models.
+// downloaded from Hugging Face on first use and cached in node_modules/.cache/praxis-models
+// (inside node_modules so the dev server's file watcher ignores it).
 //
 // Vectors are mean-pooled and L2-normalised, so cosine similarity = dot product,
 // which pgvector computes with the <=> (cosine distance) operator.
@@ -22,7 +23,7 @@ function getExtractor(): Promise<Extractor> {
   if (!globalForEmbed.extractor) {
     globalForEmbed.extractor = (async () => {
       const { pipeline, env } = await import("@huggingface/transformers");
-      env.cacheDir = process.env.EMBED_CACHE_DIR || path.join(process.cwd(), ".cache", "models");
+      env.cacheDir = process.env.EMBED_CACHE_DIR || path.join(process.cwd(), "node_modules", ".cache", "praxis-models");
       if (process.env.EMBED_MODEL_PATH) {
         // optional: load the model from a local folder instead of downloading it
         env.localModelPath = process.env.EMBED_MODEL_PATH;

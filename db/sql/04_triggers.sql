@@ -102,8 +102,11 @@ CREATE TRIGGER trg_check_status_transition
 -- ---------------------------------------------------------------------
 -- 3. Audit trail: every status (including the first) is logged
 -- ---------------------------------------------------------------------
+-- SECURITY DEFINER: the app role has no INSERT right on the history table
+-- (so the audit trail can't be forged), but this trigger runs with the
+-- owner's rights and can still write it.
 CREATE OR REPLACE FUNCTION fn_log_status_change()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
     IF TG_OP = 'INSERT' OR NEW.status IS DISTINCT FROM OLD.status THEN
         INSERT INTO application_status_history (application_id, old_status, new_status, changed_by)
@@ -189,3 +192,61 @@ $$;
 CREATE TRIGGER trg_validate_endorsement
     BEFORE INSERT OR UPDATE ON skill_endorsements
     FOR EACH ROW EXECUTE FUNCTION fn_validate_endorsement();
+
+-- ---------------------------------------------------------------------
+-- 7. Invitations are only valid when
+--    * the inviter is the faculty member who owns the opening
+--    * the opening is open and before its deadline
+--    * the student is eligible (CGPA, semester, no ongoing internship)
+--    * the student hasn't already applied
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_validate_invitation()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE
+    v_opening openings%ROWTYPE;
+BEGIN
+    SELECT * INTO v_opening FROM openings WHERE opening_id = NEW.opening_id;
+
+    IF v_opening.faculty_id <> NEW.invited_by THEN
+        RAISE EXCEPTION 'Only the faculty member who posted this opening can invite students'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_opening.status <> 'open' OR v_opening.deadline <= now() THEN
+        RAISE EXCEPTION 'Invitations can only be sent for open openings before the deadline'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF NOT fn_is_eligible(NEW.student_id, NEW.opening_id) THEN
+        RAISE EXCEPTION 'This student is not eligible for the opening'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF EXISTS (SELECT 1 FROM applications
+               WHERE student_id = NEW.student_id AND opening_id = NEW.opening_id) THEN
+        RAISE EXCEPTION 'This student has already applied'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_validate_invitation
+    BEFORE INSERT ON invitations
+    FOR EACH ROW EXECUTE FUNCTION fn_validate_invitation();
+
+-- ---------------------------------------------------------------------
+-- 8. Applying to an opening you were invited to accepts the invitation
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_accept_invitation_on_apply()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE invitations
+    SET status = 'accepted', responded_at = now()
+    WHERE opening_id = NEW.opening_id
+      AND student_id = NEW.student_id
+      AND status <> 'accepted';
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER trg_accept_invitation_on_apply
+    AFTER INSERT ON applications
+    FOR EACH ROW EXECUTE FUNCTION fn_accept_invitation_on_apply();

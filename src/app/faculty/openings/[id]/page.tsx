@@ -7,6 +7,7 @@ import { ActionButton } from "@/components/ActionButton";
 import { ScoreBreakdown, scoreParts } from "@/components/ScoreBreakdown";
 import { bestEvidence } from "@/lib/vectors";
 import { fromPgVector } from "@/lib/embed";
+import { InviteButton } from "@/components/InviteButton";
 
 export const metadata = { title: "Opening" };
 
@@ -52,11 +53,11 @@ export default async function FacultyOpeningPage({
       `SELECT semester FROM opening_eligible_semesters WHERE opening_id = $1 ORDER BY semester`, [id]),
     // Applicants with their profile, best-matching first
     query<{
-      application_id: string; status: string; match_score: string | null; applied_at: Date; sop: string | null;
+      application_id: string; student_id: string; status: string; match_score: string | null; applied_at: Date; sop: string | null;
       full_name: string; srn: string; branch: string; semester: number; cgpa: string;
       github_username: string | null; proof_score: string; skills: string[] | null;
     }>(
-      `SELECT a.application_id, a.status, a.match_score, a.applied_at, a.sop,
+      `SELECT a.application_id, a.student_id, a.status, a.match_score, a.applied_at, a.sop,
               s.full_name, s.srn, s.branch, s.semester, s.cgpa, s.github_username, s.proof_score,
               ARRAY(SELECT sk.name FROM student_skills ss JOIN skills sk ON sk.skill_id = ss.skill_id
                     WHERE ss.student_id = s.student_id ORDER BY ss.proficiency DESC LIMIT 6) AS skills
@@ -87,9 +88,10 @@ export default async function FacultyOpeningPage({
     [candidates.rows.map((c) => Number(c.student_id))]
   );
   const verifiedBy = new Map(verified.rows.map((v) => [Number(v.student_id), v.skills]));
-  const extras = await query<{ student_id: string; momentum_score: string; new_alert: boolean }>(
+  const extras = await query<{ student_id: string; momentum_score: string; new_alert: boolean; invitation: string | null }>(
     `SELECT s.student_id, s.momentum_score,
-            EXISTS (SELECT 1 FROM match_alerts ma WHERE ma.student_id = s.student_id AND ma.opening_id = $2 AND NOT ma.is_seen) AS new_alert
+            EXISTS (SELECT 1 FROM match_alerts ma WHERE ma.student_id = s.student_id AND ma.opening_id = $2 AND NOT ma.is_seen) AS new_alert,
+            (SELECT inv.status::text FROM invitations inv WHERE inv.student_id = s.student_id AND inv.opening_id = $2) AS invitation
      FROM students s WHERE s.student_id = ANY($1::bigint[])`,
     [candidates.rows.map((c) => Number(c.student_id)), id]
   );
@@ -158,13 +160,14 @@ export default async function FacultyOpeningPage({
                         <span className="mt-0.5 w-5 text-right font-serif text-lg text-muted">{i + 1}</span>
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">{c.full_name}</span>
+                            <Link href={`/faculty/students/${c.student_id}?opening=${id}`} className="font-medium hover:text-accent hover:underline">{c.full_name}</Link>
                             <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">
                               {Math.round(Number(c.total_score) * 100)}% match
                             </span>
-                            {c.application_status ? <StatusBadge status={c.application_status} /> : (
-                              <span className="text-xs text-muted">hasn&apos;t applied</span>
-                            )}
+                            {c.application_status ? <StatusBadge status={c.application_status} />
+                              : extraBy.get(Number(c.student_id))?.invitation
+                                ? <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold">Invited · {extraBy.get(Number(c.student_id))!.invitation}</span>
+                                : <span className="text-xs text-muted">hasn&apos;t applied</span>}
                             {extraBy.get(Number(c.student_id))?.new_alert && (
                               <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold">New match</span>
                             )}
@@ -178,6 +181,9 @@ export default async function FacultyOpeningPage({
                           )}
                           {c.matched_skills.length > 0 && (
                             <div className="mt-1 text-xs">Has: {c.matched_skills.join(", ")}</div>
+                          )}
+                          {op.status === "open" && !c.application_status && !extraBy.get(Number(c.student_id))?.invitation && (
+                            <div className="mt-2"><InviteButton openingId={id} studentId={Number(c.student_id)} name={c.full_name.split(" ")[0]} /></div>
                           )}
                           {verifiedBy.get(Number(c.student_id)) && (
                             <div className="mt-1 text-xs text-accent">✓ Verified by faculty: {verifiedBy.get(Number(c.student_id))!.join(", ")}</div>
@@ -201,7 +207,7 @@ export default async function FacultyOpeningPage({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{a.full_name}</span>
+                          <Link href={`/faculty/students/${a.student_id}?opening=${id}`} className="font-medium hover:text-accent hover:underline">{a.full_name}</Link>
                           <StatusBadge status={a.status} />
                         </div>
                         <div className="mt-0.5 text-xs text-muted">

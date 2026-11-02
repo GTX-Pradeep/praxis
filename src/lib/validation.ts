@@ -106,3 +106,9 @@ export const completeInternshipSchema = z.object({
   remarks: z.string().trim().max(1000).optional(),
   skillIds: z.array(z.coerce.number().int().positive()).max(10).default([]),
 });
+
+export const inviteSchema = z.object({
+  openingId: z.coerce.number().int().positive(),
+  studentId: z.coerce.number().int().positive(),
+  message: z.string().trim().max(500, "Keep the message under 500 characters").optional(),
+});

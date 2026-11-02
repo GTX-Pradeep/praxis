@@ -1,5 +1,5 @@
 // Loads a realistic demo dataset so every screen has something to show:
-//   8 faculty in 6 labs, ~47 students with resumes, GitHub profiles and growth
+//   8 faculty in 6 labs, 48 students with resumes, GitHub profiles and growth
 //   history, 4 completed + 1 ongoing internship, 12 open openings with
 //   applications at every stage, and a week of activity logs.
 //
@@ -19,7 +19,7 @@ import bcrypt from "bcryptjs";
 import { pathToFileURL } from "node:url";
 import {
   BRANCHES, THEMES, FORKS, FACULTY, KEY_STUDENTS, FIRST_NAMES, LAST_NAMES, GENERATED_MIX,
-  PAST_OPENINGS, ONGOING_OPENING, CURRENT_OPENINGS, SOPS,
+  PAST_OPENINGS, ONGOING_OPENING, CURRENT_OPENINGS, SOPS, INVITATIONS,
 } from "./demo-data.mjs";
 
 const DOMAIN = "praxis.demo";
@@ -432,6 +432,7 @@ export async function runDemo({ pg: db, mongo, password, log = console.log }) {
   log("Open openings and applications");
   const openings = {};
   const appsPerStudent = {};
+  const applied = new Set();
   for (const o of CURRENT_OPENINGS) {
     const op = await createOpening(o, o.deadlineDays);
     openings[o.key] = op;
@@ -444,7 +445,7 @@ export async function runDemo({ pg: db, mongo, password, log = console.log }) {
     const order = { strong: 0, medium: 1, weak: 2 };
     const pool = Object.values(students)
       .filter((s) => s.theme === o.plan.theme && !named.includes(s) && eligible(s, op) && (appsPerStudent[s.key] ?? 0) < 3)
-      .filter((s) => !["karthik", "divya", "rahul", "sneha"].includes(s.key))
+      .filter((s) => !["karthik", "divya", "rahul", "sneha", "tara"].includes(s.key))
       .map((s) => ({ s, r: rand() }))
       .sort((a, b) => order[a.s.strength] - order[b.s.strength] || a.r - b.r)
       .map((x) => x.s);
@@ -457,6 +458,7 @@ export async function runDemo({ pg: db, mongo, password, log = console.log }) {
     for (const st of chosen) {
       const a = await apply(st, op);
       appsPerStudent[st.key] = (appsPerStudent[st.key] ?? 0) + 1;
+      applied.add(`${st.key}:${o.key}`);
       let steps = [];
       if (offered.has(st.key)) steps = ["shortlisted", "offered"];
       else {
@@ -470,6 +472,26 @@ export async function runDemo({ pg: db, mongo, password, log = console.log }) {
       for (const s of steps) await setStatus(s === "withdrawn" ? st.id : op.facultyId, a, s);
       await backdate(a, Math.max(1, ageDays - 1 - i), Math.max(0.3, (ageDays - i) / (steps.length + 2)));
       i++;
+    }
+  }
+
+  // ---------- invitations to suggested students who haven't applied ----------
+  log("Invitations");
+  for (const [fKey, oKey, who, message, declined] of INVITATIONS) {
+    const op = openings[oKey];
+    const st = who.startsWith("theme:")
+      ? Object.values(students)
+          .filter((s) => s.theme === who.slice(6) && s.strength !== "weak" && eligible(s, op)
+            && !applied.has(`${s.key}:${oKey}`) && !["karthik", "divya", "rahul", "sneha", "tara"].includes(s.key))
+          .sort((a, b) => (a.strength === "strong" ? 0 : 1) - (b.strength === "strong" ? 0 : 1))[0]
+      : students[who];
+    if (!st || !eligible(st, op) || applied.has(`${st.key}:${oKey}`)) continue;
+    const inv = await as(faculty[fKey].id, async () => Number((await one(
+      `INSERT INTO invitations (opening_id, student_id, invited_by, message, created_at)
+       VALUES ($1, $2, $3, $4, now() - interval '2 days') RETURNING invitation_id`,
+      [op.id, st.id, faculty[fKey].id, message])).invitation_id));
+    if (declined) {
+      await q(`UPDATE invitations SET status = 'declined', responded_at = now() - interval '1 day' WHERE invitation_id = $1`, [inv]);
     }
   }
 
@@ -495,7 +517,8 @@ export async function runDemo({ pg: db, mongo, password, log = console.log }) {
   const totals = await one(`SELECT (SELECT COUNT(*) FROM students) AS students, (SELECT COUNT(*) FROM faculty) AS faculty,
                                    (SELECT COUNT(*) FROM openings WHERE status = 'open') AS open_openings,
                                    (SELECT COUNT(*) FROM applications) AS applications,
-                                   (SELECT COUNT(*) FROM internships) AS internships`);
+                                   (SELECT COUNT(*) FROM internships) AS internships,
+                                   (SELECT COUNT(*) FROM invitations) AS invitations`);
   return { totals, faculty, students };
 }
 
@@ -516,7 +539,7 @@ async function main() {
       pg: db, mongo: mc.db(process.env.MONGODB_DB || "praxis"), password, log: (m) => console.log(`  ✓ ${m}`),
     });
     console.log(`\nLoaded ${totals.students} students, ${totals.faculty} faculty, ${totals.open_openings} open openings, ` +
-      `${totals.applications} applications, ${totals.internships} internships.`);
+      `${totals.applications} applications, ${totals.internships} internships, ${totals.invitations} invitations.`);
 
     // Ask the running app to compute vectors, scores, success profiles and alerts
     const base = process.env.APP_URL || "http://localhost:3000";
@@ -546,6 +569,7 @@ async function main() {
     console.log("  Student, top medical profile  " + key("ananya"));
     console.log("  Student, fork-heavy GitHub    " + key("rahul"));
     console.log("  Student, rising momentum      " + key("sneha"));
+    console.log("  Student, invited by Dr. Meera " + key("tara"));
     console.log("  Students racing for 1 seat    " + key("karthik") + "  and  " + key("divya"));
     console.log("\nFull list and a demo script: docs/demo-guide.md");
   } catch (e) {

@@ -208,6 +208,52 @@ Number(ranked.rows[0].success_score) > 0 ? ok("success-profile similarity is par
 const alerts = await one(`SELECT fn_check_alerts($1) AS n`, [chai]);
 ok(`fn_check_alerts created ${alerts.n} alert(s) for Chai`);
 
+console.log("\nInvitation tests");
+const op3 = await one(`INSERT INTO openings (center_id, faculty_id, title, description, domain, seats_total, min_cgpa, duration_weeks, deadline)
+  VALUES ($1, $2, 'Invite-only test opening', 'An opening used to test invitations and their triggers.', 'Test', 1, 7.0, 4, now() + interval '5 days')
+  RETURNING opening_id`, [center.center_id, fUser.user_id]);
+await expectError("only the opening's owner can invite",
+  () => q(`INSERT INTO invitations (opening_id, student_id, invited_by) VALUES ($1, $2, $3)`, [op3.opening_id, chai, otherProf.user_id]),
+  /Only the faculty member who posted/);
+await expectError("cannot invite an ineligible student (CGPA)",
+  () => q(`INSERT INTO invitations (opening_id, student_id, invited_by) VALUES ($1, $2, $3)`, [op3.opening_id, dev, fUser.user_id]),
+  /not eligible/);
+const inv = await expectOk("owner invites an eligible student",
+  () => one(`INSERT INTO invitations (opening_id, student_id, invited_by, message) VALUES ($1, $2, $3, 'Your repo looks great') RETURNING invitation_id`, [op3.opening_id, chai, fUser.user_id]));
+await expectError("cannot invite the same student twice",
+  () => q(`INSERT INTO invitations (opening_id, student_id, invited_by) VALUES ($1, $2, $3)`, [op3.opening_id, chai, fUser.user_id]),
+  /uq_invitation_once/);
+await expectError("responded_at must match status",
+  () => q(`UPDATE invitations SET status = 'declined' WHERE invitation_id = $1`, [inv.invitation_id]),
+  /chk_invitation_response/);
+await q(`INSERT INTO applications (student_id, opening_id) VALUES ($1, $2)`, [chai, op3.opening_id]);
+const invAfter = await one(`SELECT status, responded_at FROM invitations WHERE invitation_id = $1`, [inv.invitation_id]);
+invAfter.status === "accepted" && invAfter.responded_at
+  ? ok("applying auto-accepts the invitation (trigger)")
+  : bad("auto-accept", JSON.stringify(invAfter));
+await expectError("cannot invite a student who already applied",
+  () => q(`INSERT INTO invitations (opening_id, student_id, invited_by) VALUES ($1, $2, $3)`, [op3.opening_id, ben, fUser.user_id]).then(() =>
+       q(`INSERT INTO applications (student_id, opening_id) VALUES ($1, $2)`, [ana, op3.opening_id])).then(() =>
+       q(`INSERT INTO invitations (opening_id, student_id, invited_by) VALUES ($1, $2, $3)`, [op3.opening_id, ana, fUser.user_id])),
+  /already applied/);
+
+console.log("\nRestricted app role (what the web app connects as)");
+await q(`CREATE ROLE praxis_app_test`);
+await q(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO praxis_app_test`);
+await q(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO praxis_app_test`);
+await q(`REVOKE INSERT, UPDATE, DELETE ON application_status_history FROM praxis_app_test`);
+async function asApp(label, fn, expectFail) {
+  await q("BEGIN"); await q("SET LOCAL ROLE praxis_app_test");
+  try { await fn(); expectFail ? bad(label, "was allowed") : ok(label); }
+  catch (e) { expectFail && /permission denied/.test(e.message) ? ok(label) : bad(label, e.message); }
+  finally { await q("ROLLBACK"); }
+}
+const appRow = await one(`SELECT application_id FROM applications WHERE status = 'applied' LIMIT 1`);
+await asApp("app role can change a status; the audit trigger still writes history",
+  () => q(`UPDATE applications SET status = 'shortlisted' WHERE application_id = $1`, [appRow.application_id]));
+await asApp("app role cannot write history rows directly",
+  () => q(`INSERT INTO application_status_history (application_id, new_status) VALUES ($1, 'applied')`, [appRow.application_id]), true);
+
 console.log("\nSearch & views");
 const fts = await q(`SELECT title, ts_rank(search_tsv, q) AS rank FROM openings, plainto_tsquery('english', 'retinal image classification') q
                      WHERE search_tsv @@ q ORDER BY rank DESC`);

@@ -3,6 +3,7 @@ import { query } from "@/lib/db";
 import { getStudentDocs } from "@/lib/student-docs";
 import { DashboardShell, Card, PageTitle } from "@/components/DashboardShell";
 import { SkillsEditor } from "./SkillsEditor";
+import { GrowthChart } from "@/components/GrowthChart";
 import { GithubPanel } from "./GithubPanel";
 import { ResumeUpload } from "./ResumeUpload";
 
@@ -94,7 +95,8 @@ export default async function ProfilePage() {
       {docs.snapshots.length > 0 && (
         <div className="mt-4">
           <Card title="Growth timeline" note={`Momentum ${Number(s.momentum_score) >= 0 ? "+" : ""}${Number(s.momentum_score).toFixed(1)} proof points/month`}>
-            <table className="w-full text-left">
+            <GrowthChart points={docs.snapshots.map((sn) => ({ month: sn.month, value: Number(sn.proof_score) }))} />
+            <table className="mt-4 w-full text-left">
               <thead className="text-xs uppercase tracking-wide text-muted">
                 <tr><th className="py-2">Month</th><th className="py-2 text-right">Original repos</th><th className="py-2 text-right">Own commits</th><th className="py-2 text-right">Proof score</th></tr>
               </thead>

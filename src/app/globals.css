@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* Only scan app code for class names, never caches, docs or scripts */
+@source not "../../.cache";
+@source not "../../docs";
+@source not "../../scripts";
+@source not "../../db";
 
 :root {
   --paper: #f7f5f0;

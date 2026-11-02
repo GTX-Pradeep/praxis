@@ -46,3 +46,43 @@ export async function getStudentDocs(studentId: number): Promise<StudentDocs> {
     return empty;
   }
 }
+
+export type EvidenceRepo = {
+  name: string;
+  description: string | null;
+  is_fork: boolean;
+  languages: Record<string, number>;
+  topics: string[];
+  stars: number;
+  own_commits: number;
+  total_commits: number;
+  active_weeks: number;
+  last_pushed: Date | null;
+  embedding?: number[];
+};
+
+export type StudentEvidence = StudentDocs & {
+  repos: EvidenceRepo[];
+  resumeSections: Record<string, string[]>;
+};
+
+/** Full evidence for one student (repos with vectors, resume sections) for the faculty evidence page */
+export async function getStudentEvidence(studentId: number): Promise<StudentEvidence> {
+  const docs = await getStudentDocs(studentId);
+  if (!docs.mongoAvailable) return { ...docs, repos: [], resumeSections: {} };
+  try {
+    const db = await getMongo();
+    const sid = Long.fromNumber(studentId);
+    const [gh, resume] = await Promise.all([
+      db.collection("github_profiles").findOne({ student_id: sid }, { projection: { repos: 1 } }),
+      db.collection("resumes").findOne({ student_id: sid }, { projection: { sections: 1 } }),
+    ]);
+    return {
+      ...docs,
+      repos: ((gh?.repos ?? []) as EvidenceRepo[]),
+      resumeSections: (resume?.sections ?? {}) as Record<string, string[]>,
+    };
+  } catch {
+    return { ...docs, repos: [], resumeSections: {} };
+  }
+}

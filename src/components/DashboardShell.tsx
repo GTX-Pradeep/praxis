@@ -102,6 +102,9 @@ const statusStyle: Record<string, string> = {
   open: "bg-accent-soft text-accent",
   closed: "bg-line text-muted",
   filled: "bg-accent text-paper",
+  pending: "bg-warn-soft text-ink",
+  declined: "bg-line text-muted",
+  invited: "bg-warn-soft text-ink",
 };
 
 export function StatusBadge({ status }: { status: string }) {

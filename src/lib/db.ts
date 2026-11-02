@@ -68,6 +68,7 @@ export function dbErrorMessage(err: unknown): { status: number; message: string 
         students_github_username_key: "This GitHub username is already linked to another account.",
         uq_application_once: "You have already applied to this opening.",
         research_centers_name_key: "A research center with this name already exists. Pick it from the list instead.",
+        uq_invitation_once: "This student has already been invited to this opening.",
       };
       return { status: 409, message: map[e.constraint ?? ""] ?? "This record already exists." };
     }
@@ -86,6 +87,7 @@ export function dbErrorMessage(err: unknown): { status: number; message: string 
         chk_openings_filled: "All seats for this opening are already filled.",
         chk_openings_seats: "Seats must be between 1 and 50.",
         chk_application_sop: "The statement of purpose is too long.",
+        chk_invitation_message: "Keep the invitation message under 500 characters.",
       };
       return {
         status: 400,

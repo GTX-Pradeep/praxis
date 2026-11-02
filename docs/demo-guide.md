@@ -1,6 +1,6 @@
 # Demo guide
 
-How to load the demo dataset, who to log in as, and a 7-minute walkthrough that shows every feature and the database concept behind it.
+How to load the demo dataset, who to log in as, and an 8-minute walkthrough that shows every feature and the database concept behind it.
 
 ## Load the demo data
 
@@ -21,11 +21,12 @@ npm run db:demo       # terminal 2: load demo data, then compute vectors and sco
 |---|---|
 | Research labs | 6 (5 seeded + 1 new lab awaiting approval) |
 | Faculty | 8 (7 verified, 1 pending) |
-| Students | 47, each with skills; 44 resumes and 43 GitHub profiles in MongoDB |
-| Monthly growth snapshots | ~230 documents (up to 6 months per student) |
+| Students | 48, each with skills; 45 resumes and 44 GitHub profiles in MongoDB |
+| Monthly growth snapshots | ~235 documents (up to 6 months per student) |
 | Open openings | 12, with about 40 applications at every stage (applied, shortlisted, offered, rejected, withdrawn) |
 | Completed internships | 5, rated 3–5, with skill endorsements |
 | Ongoing internship | 1 (to complete live) |
+| Invitations | 3 (2 pending, 1 declined) |
 | Activity log | 140 entries over the last 7 days |
 
 Everything is inserted through the real tables, constraints and triggers (status changes, `sp_accept_offer`, ratings, endorsements). Only timestamps are moved into the past afterwards so the history looks natural. All names, emails and GitHub accounts are invented.
@@ -52,10 +53,11 @@ All demo accounts use the password **`Demo@1234`** (set `DEMO_PASSWORD` in `.env
 | Student | `sneha.patil@praxis.demo` | 2nd-year, momentum +18 proof points/month |
 | Student | `arjun.shetty@praxis.demo` | Currently interning with Dr. Meera |
 | Student | `nikhil.agarwal@praxis.demo` | Strong web developer, wrong field for medical imaging |
+| Student | `tara.fernandes@praxis.demo` | Strong candidate who hadn't applied; Dr. Meera has invited her |
 
 Use a normal window for one account and an incognito window for another.
 
-## 7-minute walkthrough
+## 8-minute walkthrough
 
 ### 1. The problem and the idea (30 s)
 Labs recruit by forwarding PDFs; resumes are claims. Praxis ranks students by **proven** work: GitHub history, faculty endorsements, and similarity to each lab's best past interns.
@@ -67,6 +69,7 @@ Log in as **Dr. Meera** → open **Brain MRI tumour segmentation intern**.
 - Scroll to **Rahul Verma**: his resume is the most similar text of anyone, but his GitHub is 7 forks and one copied repo pushed in a single week (proof-of-work **14%**), so his self-claimed skills count for less. He ranks below every real medical student.
 - **Nikhil Agarwal** has high proof-of-work but builds web apps, so he ranks near the bottom.
 - Click **Like my best interns**: the ranking reorders by similarity to the lab's success profile, the average vector of interns rated 4–5.
+- Click **Rahul's name** to open his **evidence page**: 7 forks flagged as not his work, one repo where he wrote 46 of 160 commits in a single week, only two months of history, and every skill only "self-rated". Compare with **Ananya**: repos ranked by relevance to this opening, skills **✓ verified by Dr. Meera**, a 5-star internship with remarks.
 
 *Database concepts: stored function `fn_rank_candidates` with `CROSS JOIN LATERAL`, pgvector cosine distance `<=>`, HNSW index.*
 
@@ -79,23 +82,30 @@ One succeeds; the other gets **"No seats left"**, and their application stays "o
 
 > This uses up the seat. To run it again, reload the demo (see the end).
 
-### 4. Outcomes feed back into matching (1 min)
+### 4. Inviting a candidate who hasn't applied (45 s)
+Still on Brain MRI: **Tara Fernandes** shows **Invited · pending**. Click **Invite to apply** on any other strong candidate to show the form.
+
+Log in as **Tara**: the dashboard says *A lab invited you to apply* with Dr. Meera's note. Open it, apply, and the invitation becomes **accepted** automatically.
+
+*Concepts: `invitations` table with a UNIQUE pair constraint, `trg_validate_invitation` (only the opening's owner, only eligible students, never someone who already applied) and `trg_accept_invitation_on_apply`.*
+
+### 5. Outcomes feed back into matching (1 min)
 As **Dr. Meera** → **Interns** → **Arjun Shetty** → **Complete & rate**: give 5 stars, endorse PyTorch, save.
 
 - The rating trigger calls `sp_refresh_success_profile`, which recomputes the lab's success profile.
 - Arjun's profile now shows **✓ Verified** skills, which count double in future matching.
 - Trying to endorse before the internship ends, or as another faculty member, is rejected by `trg_validate_endorsement`.
 
-### 5. Student side (1 min)
+### 6. Student side (1 min)
 Log in as **Sneha**:
 - **Openings** → search *deep learning on brain scans*: results come from both full-text search and meaning (tagged "Matches by meaning"). Brain MRI shows **Not eligible** with the exact reason (semester 3).
 - **Dashboard**: recommendations, each with a skill-gap hint (e.g. "adding Networking would raise your match").
-- **Profile**: growth timeline and momentum from monthly snapshots in MongoDB.
+- **Profile**: growth chart and momentum from monthly snapshots in MongoDB.
 
-### 6. Match alerts (30 s)
+### 7. Match alerts (30 s)
 Back as **Dr. Meera** → **Alerts**: students whose updated profiles crossed each opening's threshold (`fn_check_alerts`). Sneha's **↑ +18/month** also appears next to her name in candidate lists.
 
-### 7. Admin (1 min)
+### 8. Admin (1 min)
 Log in as **admin**:
 - **Overview**: approve **Dr. Kavya Nair**, who registered a new lab (tagged "new lab, head").
 - **Analytics**: each panel has **Show query**: materialized view, CTE with LEFT JOIN, GROUP BY + HAVING, subquery, and two MongoDB aggregation pipelines.

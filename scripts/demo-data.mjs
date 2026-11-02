@@ -140,6 +140,8 @@ export const KEY_STUDENTS = [
   { key: "rahul", name: "Rahul Verma", theme: "medical", strength: "weak", branch: "CSE", semester: 6, cgpa: 8.92, forkHeavy: true },
   // second-year whose proof-of-work is climbing fast (momentum demo)
   { key: "sneha", name: "Sneha Patil", theme: "nlp", strength: "strong", branch: "AIML", semester: 3, cgpa: 8.41, trajectory: "breakout" },
+  // strong medical student who hasn't applied yet; Dr. Meera has invited her (invitation demo)
+  { key: "tara", name: "Tara Fernandes", theme: "medical", strength: "strong", branch: "AIML", semester: 6, cgpa: 9.21 },
   // strong web developer: high proof-of-work, but not a research fit for medical imaging
   { key: "nikhil", name: "Nikhil Agarwal", theme: "web", strength: "strong", branch: "CSE", semester: 6, cgpa: 8.2 },
 ];
@@ -291,4 +293,11 @@ export const SOPS = [
   "I want to move from coursework to real research, and this problem is exactly what interests me.",
   "I enjoyed the related elective and built a small prototype; I would like to learn the research process.",
   "My recent project used the same tools, and I am comfortable reading papers and reproducing results.",
+];
+
+// Faculty invite strong students who haven't applied: [faculty, opening key, student key | theme, message, declined?]
+export const INVITATIONS = [
+  ["meera", "mri", "tara", "Your segmentation repositories are exactly what this project needs. I'd love to see your application."],
+  ["lakshmi", "legal", "theme:nlp", "Your transformer projects look strong; this opening may interest you."],
+  ["farhan", "lake", "theme:cloud", "We liked your data pipeline work. Consider applying!", true],
 ];

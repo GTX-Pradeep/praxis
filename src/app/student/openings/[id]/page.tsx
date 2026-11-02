@@ -18,12 +18,17 @@ export default async function StudentOpeningPage({ params }: { params: Promise<{
     deadline: Date; center_name: string; center_description: string | null; faculty_name: string;
     designation: string | null; my_status: string | null; my_cgpa: string; my_semester: number;
     has_ongoing: boolean; semesters: number[]; deadline_passed: boolean;
+    invited_by: string | null; invite_message: string | null; invite_status: string | null;
   }>(
     `SELECT o.opening_id, o.title, o.description, o.domain, o.status, o.seats_total, o.seats_filled,
             o.min_cgpa, o.duration_weeks, o.stipend, o.deadline, (o.deadline < now()) AS deadline_passed,
             rc.name AS center_name, rc.description AS center_description,
             f.full_name AS faculty_name, f.designation,
-            a.status AS my_status, s.cgpa AS my_cgpa, s.semester AS my_semester,
+            a.status AS my_status,
+            (SELECT f2.full_name FROM invitations inv JOIN faculty f2 ON f2.faculty_id = inv.invited_by
+             WHERE inv.opening_id = o.opening_id AND inv.student_id = s.student_id) AS invited_by,
+            (SELECT inv.message FROM invitations inv WHERE inv.opening_id = o.opening_id AND inv.student_id = s.student_id) AS invite_message,
+            (SELECT inv.status::text FROM invitations inv WHERE inv.opening_id = o.opening_id AND inv.student_id = s.student_id) AS invite_status, s.cgpa AS my_cgpa, s.semester AS my_semester,
             EXISTS (SELECT 1 FROM applications a2 JOIN internships i ON i.application_id = a2.application_id
                     WHERE a2.student_id = s.student_id AND a2.status = 'accepted' AND i.end_date IS NULL) AS has_ongoing,
             ARRAY(SELECT semester FROM opening_eligible_semesters e WHERE e.opening_id = o.opening_id ORDER BY semester) AS semesters
@@ -99,6 +104,12 @@ export default async function StudentOpeningPage({ params }: { params: Promise<{
         </div>
 
         <div>
+          {op.invited_by && op.invite_status === "pending" && !op.my_status && (
+            <div className="mb-4 rounded-xl border border-accent bg-accent-soft p-4 text-sm">
+              <p className="font-semibold">{op.invited_by} invited you to apply</p>
+              {op.invite_message && <p className="mt-1">&ldquo;{op.invite_message}&rdquo;</p>}
+            </div>
+          )}
           <Card title="Apply">
             <p className="mb-3 text-xs text-muted">
               Closes {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" }).format(op.deadline)}

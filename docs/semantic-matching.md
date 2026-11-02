@@ -17,7 +17,7 @@ Repos where the student wrote more commits get more weight in the GitHub average
 
 - **all-MiniLM-L6-v2** (sentence-transformers), 384 dimensions
 - Runs locally inside the Next.js server with **Transformers.js** (ONNX runtime): no API key, no paid service, no data leaves the machine
-- Downloaded from Hugging Face on first use (~23 MB, quantized) and cached in `.cache/models`
+- Downloaded from Hugging Face on first use (~23 MB, quantized) and cached in `node_modules/.cache/praxis-models`
 - Vectors are mean-pooled and L2-normalised
 
 Code: `src/lib/embed.ts`, `src/lib/vectors.ts`

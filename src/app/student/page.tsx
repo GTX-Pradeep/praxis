@@ -3,13 +3,14 @@ import { requireRole } from "@/lib/session";
 import { query } from "@/lib/db";
 import { getStudentDocs } from "@/lib/student-docs";
 import { DashboardShell, Card, Stat, StatusBadge } from "@/components/DashboardShell";
+import { ActionButton } from "@/components/ActionButton";
 
 export const metadata = { title: "Student dashboard" };
 
 export default async function StudentDashboard() {
   const session = await requireRole("student");
 
-  const [profile, recent, fresh, docs, recommended] = await Promise.all([
+  const [profile, recent, fresh, docs, recommended, invites] = await Promise.all([
     query<{
       full_name: string; srn: string; branch: string; semester: number; cgpa: string;
       github_username: string | null; proof_score: string; skill_count: string;
@@ -52,6 +53,16 @@ export default async function StudentDashboard() {
        ORDER BY m.total_score DESC
        LIMIT 3`,
       [session.userId]),
+    // Pending invitations from faculty (only for openings still open)
+    query<{ invitation_id: string; opening_id: string; title: string; center_name: string; faculty_name: string; message: string | null; deadline: Date }>(
+      `SELECT inv.invitation_id, o.opening_id, o.title, rc.name AS center_name, f.full_name AS faculty_name, inv.message, o.deadline
+       FROM invitations inv
+       JOIN openings o          ON o.opening_id = inv.opening_id
+       JOIN research_centers rc ON rc.center_id = o.center_id
+       JOIN faculty f           ON f.faculty_id = inv.invited_by
+       WHERE inv.student_id = $1 AND inv.status = 'pending' AND o.status = 'open' AND o.deadline > now()
+       ORDER BY inv.created_at DESC`,
+      [session.userId]),
   ]);
   const s = profile.rows[0];
 
@@ -67,6 +78,31 @@ export default async function StudentDashboard() {
       <p className="mt-1 text-muted">
         {s.srn} · {s.branch} · Semester {s.semester} · CGPA {Number(s.cgpa).toFixed(2)}
       </p>
+
+      {invites.rows.length > 0 && (
+        <section className="mt-5 rounded-xl border border-accent bg-card p-5">
+          <h2 className="font-serif text-lg font-semibold">
+            {invites.rows.length === 1 ? "A lab invited you to apply" : `${invites.rows.length} labs invited you to apply`}
+          </h2>
+          <ul className="mt-3 divide-y divide-line">
+            {invites.rows.map((inv) => (
+              <li key={inv.invitation_id} className="flex flex-wrap items-start justify-between gap-3 py-3">
+                <div>
+                  <Link href={`/student/openings/${inv.opening_id}`} className="font-medium hover:text-accent">{inv.title}</Link>
+                  <div className="text-xs text-muted">
+                    {inv.faculty_name} · {inv.center_name} · closes {inv.deadline.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
+                  </div>
+                  {inv.message && <p className="mt-1 text-sm">&ldquo;{inv.message}&rdquo;</p>}
+                </div>
+                <div className="flex gap-2">
+                  <Link href={`/student/openings/${inv.opening_id}`} className="btn px-3 py-1.5 text-sm">View &amp; apply</Link>
+                  <ActionButton url={`/api/invitations/${inv.invitation_id}`} method="PATCH" label="Decline" variant="ghost" confirm="Decline this invitation?" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {todo.length > 0 && (
         <div className="mt-5 rounded-xl border border-accent bg-accent-soft p-4 text-sm">

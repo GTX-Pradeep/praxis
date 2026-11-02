@@ -14,11 +14,11 @@ export default async function AlertsPage() {
   // Alerts are written by fn_check_alerts whenever a student's resume, GitHub or
   // skills change and their match for one of my open openings crosses its threshold.
   const alerts = await query<{
-    alert_id: string; score: string; is_seen: boolean; created_at: Date; opening_id: string; title: string;
+    alert_id: string; student_id: string; score: string; is_seen: boolean; created_at: Date; opening_id: string; title: string;
     alert_threshold: string; full_name: string; srn: string; branch: string; semester: number; cgpa: string;
     proof_score: string; momentum_score: string; application_status: string | null;
   }>(
-    `SELECT ma.alert_id, ma.score, ma.is_seen, ma.created_at, o.opening_id, o.title, o.alert_threshold,
+    `SELECT ma.alert_id, ma.student_id, ma.score, ma.is_seen, ma.created_at, o.opening_id, o.title, o.alert_threshold,
             s.full_name, s.srn, s.branch, s.semester, s.cgpa, s.proof_score, s.momentum_score,
             a.status AS application_status
      FROM match_alerts ma
@@ -50,7 +50,7 @@ export default async function AlertsPage() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       {!a.is_seen && <span className="h-2 w-2 rounded-full bg-accent" aria-label="new" />}
-                      <span className="font-medium">{a.full_name}</span>
+                      <Link href={`/faculty/students/${a.student_id}?opening=${a.opening_id}`} className="font-medium hover:text-accent hover:underline">{a.full_name}</Link>
                       <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">{Math.round(Number(a.score) * 100)}% match</span>
                       {a.application_status && <StatusBadge status={a.application_status} />}
                       {Number(a.momentum_score) > 0 && <span className="text-xs text-accent">↑ +{Number(a.momentum_score).toFixed(1)} proof/month</span>}
