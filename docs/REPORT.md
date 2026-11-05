@@ -4,10 +4,8 @@
 DBMS Experiential Learning, Level 3 Project
 
 | | |
-|---|---|
-| Team | _Member 1 (SRN)_, _Member 2 (SRN)_ |
 | Stack | Next.js 16 · PostgreSQL 16 + pgvector · MongoDB 7 |
-| Repository | _link to the GitHub repo_ |
+| Repository | [_link to the GitHub repo_ ](https://github.com/GTX-Pradeep/praxis.git)|
 
 ---
 
