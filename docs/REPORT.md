@@ -6,7 +6,7 @@ DBMS Experiential Learning, Level 3 Project
 | | |
 |---|---|
 | Stack | Next.js 16 · PostgreSQL 16 + pgvector · MongoDB 7 |
-| Repository | _link to the GitHub repo_ |https://github.com/GTX-Pradeep/praxis.git
+| Repository |https://github.com/GTX-Pradeep/praxis.git |
 
 ---
 
@@ -338,37 +338,8 @@ See **[queries.md](queries.md)** for the full list with explanations: DDL (CREAT
 - Secrets: only in `.env.local`, never committed. MongoDB and PostgreSQL passwords are set in `docker-compose.yml` for local development only.
 - Uploads: PDF only (magic-byte check), max 5 MB, only the extracted text is stored.
 
-## 12. Application screenshots
 
-Screenshots are in [`docs/screenshots/`](screenshots/). Load the demo data first (`npm run db:demo`, see the [demo guide](demo-guide.md)).
-
-| # | Screen | File |
-|---|---|---|
-| 1 | Landing page | `01-landing.png` |
-| 2 | Registration (faculty creating a new lab) | `02-register.png` |
-| 3 | Admin overview with a pending lab | `03-admin-overview.png` |
-| 4 | Admin analytics with "Show query" open | `04-admin-analytics.png` |
-| 5 | Faculty dashboard | `05-faculty-dashboard.png` |
-| 6 | Post an opening form | `06-new-opening.png` |
-| 7 | Ranked candidates with score breakdown | `07-candidates.png` |
-| 8 | Student evidence page (Rahul vs Ananya) | `08-evidence.png` |
-| 9 | Complete & rate an internship | `09-complete-internship.png` |
-| 10 | Match alerts | `10-alerts.png` |
-| 11 | Student dashboard with invitation and recommendations | `11-student-dashboard.png` |
-| 12 | Semantic search results ("Matches by meaning") | `12-search.png` |
-| 13 | Student profile: proof-of-work and growth chart | `13-profile.png` |
-| 14 | Applications with status timeline; "No seats left" error | `14-applications.png` |
-
-![Landing](screenshots/01-landing.png)
-![Admin overview](screenshots/03-admin-overview.png)
-![Analytics](screenshots/04-admin-analytics.png)
-![Candidates](screenshots/07-candidates.png)
-![Evidence page](screenshots/08-evidence.png)
-![Student dashboard](screenshots/11-student-dashboard.png)
-![Search](screenshots/12-search.png)
-![Profile](screenshots/13-profile.png)
-
-## 13. Testing results
+## 12. Testing results
 
 Full test cases are in **[testing.md](testing.md)**.
 
@@ -386,7 +357,7 @@ Notable results:
 - **Vector index**: `EXPLAIN` shows `Index Scan using idx_openings_embedding` for a nearest-neighbour query.
 - **A real bug found by testing**: the audit trigger first ran with the app role's rights, so applying failed with "permission denied" when connected as `praxis_app`. It was fixed with `SECURITY DEFINER`, and a test now runs as the restricted role.
 
-## 14. Conclusion and future enhancements
+## 13. Conclusion and future enhancements
 
 **Conclusion.** Praxis turns an informal, one-off recruitment process into a permanent, evidence-based one. The project uses each database paradigm for the data it suits:
 
@@ -412,11 +383,4 @@ The feedback loop is what moves it beyond CRUD: ratings feed success profiles, e
 6. Table partitioning of `application_status_history` and MongoDB sharding by `student_id` for multi-university scale.
 7. Deployment with managed PostgreSQL and MongoDB Atlas, CI that runs `db:test` on every push.
 
-## 15. Team contributions
 
-| Member | Database work | Application work |
-|---|---|---|
-| _Member 1_ | _e.g. PostgreSQL schema, constraints, triggers, procedures, transaction, views, db tests_ | _e.g. faculty and admin pages, opening/application APIs, analytics_ |
-| _Member 2_ | _e.g. MongoDB collections and validators, aggregation pipelines, pgvector embeddings and ranking_ | _e.g. student pages, resume upload, GitHub sync, search, demo data_ |
-
-Commit history on GitHub shows each member's work.
